@@ -1,0 +1,9 @@
+// Copyright (c) 2026 NEMES-X. All Rights Reserved. Unauthorized use prohibited.
+import { defineConfig } from "vite";
+
+export default defineConfig({
+  clearScreen: false,
+  server: { port: 1420, strictPort: true },
+  envPrefix: ["VITE_", "TAURI_"],
+  build: { target: "esnext" },
+});

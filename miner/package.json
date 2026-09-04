@@ -1,0 +1,20 @@
+{
+  "name": "nemes-miner",
+  "version": "0.2.0",
+  "description": "NEMES Miner — Mine knowledge. Not hashes. Windows Tauri app",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^1.5.6"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^1.5.11",
+    "typescript": "^5.4.0",
+    "vite": "^5.2.0"
+  }
+}

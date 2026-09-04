@@ -1,0 +1,82 @@
+{
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "beforeBuildCommand": "npm run build",
+    "devPath": "http://localhost:1420",
+    "distDir": "../dist",
+    "withGlobalTauri": false
+  },
+  "package": {
+    "productName": "NEMES Miner",
+    "version": "0.2.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "shell": { "all": false, "open": true },
+      "path": { "all": true },
+      "fs": {
+        "all": false,
+        "readFile": true,
+        "writeFile": true,
+        "exists": true,
+        "scope": ["$HOME/.nemes/**", "$RESOURCE/**"]
+      },
+      "http": {
+        "all": false,
+        "request": true,
+        "scope": [
+          "https://huggingface.co/*",
+          "https://nemes-x.space/*",
+          "https://api.nemes-x.space/*",
+          "http://127.0.0.1:11434/*"
+        ]
+      },
+      "os": { "all": true },
+      "notification": { "all": true },
+      "dialog": { "all": true }
+    },
+    "bundle": {
+      "active": true,
+      "category": "Utility",
+      "copyright": "NEMES-X",
+      "deb": { "depends": [] },
+      "externalBin": [],
+      "icon": ["icons/icon.png", "icons/icon.ico"],
+      "identifier": "space.nemes.miner",
+      "longDescription": "Mine knowledge. Not hashes. Dagitik bilgi madenciligi.",
+      "macOS": { "entitlements": null, "exceptionDomain": "", "signingIdentity": null },
+      "resources": [],
+      "shortDescription": "NEMES Miner",
+      "targets": ["nsis", "deb"],
+      "windows": {
+        "certificateThumbprint": null,
+        "digestAlgorithm": "sha256",
+        "nsis": {
+          "displayLanguageSelector": false,
+          "headerImage": null,
+          "installMode": "perMachine",
+          "installerIcon": "icons/icon.ico"
+        },
+        "timestampUrl": "http://timestamp.digicert.com",
+        "tsp": true
+      }
+    },
+    "security": { "csp": "default-src 'self'; connect-src 'self' https://huggingface.co https://cdn.jsdelivr.net https://nemes-x.space https://api.nemes-x.space http://127.0.0.1:8787 http://127.0.0.1:11434; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:;" },
+    "updater": {
+      "active": true,
+      "endpoints": ["https://nemes-x.space/updates.json"],
+      "dialog": true,
+      "pubkey": ""
+    },
+    "windows": [
+      {
+        "fullscreen": false,
+        "height": 700,
+        "resizable": true,
+        "title": "NEMES Miner — Mine knowledge. Not hashes.",
+        "width": 1100
+      }
+    ]
+  }
+}

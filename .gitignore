@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+target/
+
+# Build outputs
+dist/
+build/
+*.zip
+*.exe
+*.deb
+*.dmg
+*.AppImage
+
+# Logs
+*.log
+*.out
+
+# Temp
+*.tmp
+*.part
+*.swp
+*.swo
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Rust
+Cargo.lock
+**/target/
+
+# Tauri
+*.zip
+*.deb
+*.dmg
+*.AppImage
+
+# Local config
+.env
+.env.local
+*.local

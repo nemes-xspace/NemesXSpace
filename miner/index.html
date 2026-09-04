@@ -1,0 +1,170 @@
+<!-- Copyright (c) 2026 NEMES-X. All Rights Reserved. Unauthorized use prohibited. -->
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>NEMES Miner — Mine knowledge. Not hashes.</title>
+  <style>
+    :root { --bg:#0a0a0c; --panel:#141416; --card:#1a1a1e; --line:#232326; --mut:#9a9aa0; --txt:#e8e8ea; --gold:#b8860b; --gold2:#d4a017; --green:#2a9d6a; --red:#e05252; }
+    * { box-sizing:border-box; }
+    body { font-family: Inter, system-ui, -apple-system, sans-serif; margin:0; background:var(--bg); color:var(--txt); display:flex; height:100vh; overflow:hidden; }
+    /* Sidebar — LM Studio gibi */
+    #sidebar { width:260px; background:#0f0f11; border-right:1px solid var(--line); display:flex; flex-direction:column; padding:16px 12px; gap:6px; }
+    #sidebar .brand { display:flex; align-items:center; gap:10px; padding:8px 8px 16px; border-bottom:1px solid var(--line); margin-bottom:8px; }
+    #sidebar .brand img { width:32px; height:32px; border-radius:6px; background:#111; }
+    #sidebar .brand span { font-weight:800; letter-spacing:0.5px; }
+    #sidebar .brand small { color:var(--mut); font-weight:400; font-size:11px; display:block; }
+    #sidebar .nav { display:flex; flex-direction:column; gap:4px; }
+    #sidebar .nav button { display:flex; align-items:center; gap:10px; background:transparent; color:var(--mut); border:0; padding:10px 12px; border-radius:8px; cursor:pointer; text-align:left; font-size:13px; transition:all 0.15s; }
+    #sidebar .nav button:hover { background:var(--panel); color:var(--txt); }
+    #sidebar .nav button.active { background:var(--panel); color:var(--txt); border:1px solid var(--line); }
+    #sidebar .nav button .icon { width:18px; text-align:center; }
+    #sidebar .foot { margin-top:auto; padding:12px; background:var(--panel); border:1px solid var(--line); border-radius:10px; }
+    #sidebar .foot .gpu { font-size:11px; color:var(--mut); }
+    #sidebar .foot .status { font-size:12px; color:var(--gold); display:flex; align-items:center; gap:6px; margin-top:6px; }
+    #sidebar .foot .dot { width:8px; height:8px; border-radius:50%; background:var(--green); box-shadow:0 0 8px var(--green); }
+    #sidebar .foot .dot.off { background:var(--red); box-shadow:none; }
+    /* Main */
+    #main { flex:1; display:flex; flex-direction:column; overflow:hidden; background:var(--bg); }
+    #topbar { height:48px; display:flex; align-items:center; gap:12px; padding:0 20px; border-bottom:1px solid var(--line); background:rgba(20,20,22,0.8); backdrop-filter:blur(8px); }
+    #topbar .title { font-weight:700; font-size:14px; }
+    #topbar .search { flex:1; max-width:520px; display:flex; gap:8px; margin-left:20px; }
+    #topbar .search input { flex:1; background:var(--panel); color:var(--txt); border:1px solid var(--line); padding:8px 12px; border-radius:8px; outline:none; }
+    #topbar .search input:focus { border-color:var(--gold); }
+    #topbar .search button { background:var(--gold); color:#000; border:0; padding:8px 16px; border-radius:8px; font-weight:700; cursor:pointer; }
+    #topbar .badge { background:var(--gold); color:#000; padding:4px 8px; border-radius:6px; font-size:11px; font-weight:800; }
+    /* Progress */
+    #pull-progress-bar { position:fixed; top:0; left:0; height:3px; background:var(--gold); width:0; transition:width 0.2s; z-index:99; }
+    #pull-notify { position:fixed; top:60px; right:16px; background:var(--panel); border:1px solid var(--line); padding:14px 16px; border-radius:10px; display:none; min-width:360px; box-shadow:0 8px 30px rgba(0,0,0,0.6); z-index:99; }
+    #pull-notify.show { display:block; }
+    .progress-track { height:6px; background:#222; border-radius:3px; overflow:hidden; margin-top:10px; }
+    .progress-fill { height:100%; background:var(--gold); width:0; transition:width 0.2s; }
+    /* Tabs */
+    .tab { display:none; padding:24px; overflow:auto; flex:1; }
+    .tab.active { display:block; }
+    /* Model grid — LM Studio */
+    .model-grid { display:grid; grid-template-columns:repeat(auto-fill, minmax(320px,1fr)); gap:16px; margin-top:16px; }
+    .model-card { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; display:flex; flex-direction:column; gap:10px; transition:border-color 0.15s, transform 0.15s; }
+    .model-card:hover { border-color:#2a2a2e; transform:translateY(-1px); }
+    .model-card.indirilmis { border-color:rgba(42,157,106,0.4); }
+    .model-card .head { display:flex; gap:12px; }
+    .model-card .icon { width:44px; height:44px; border-radius:8px; background:#0f0f11; border:1px solid var(--line); display:flex; align-items:center; justify-content:center; font-size:20px; }
+    .model-card .meta { flex:1; }
+    .model-card .meta b { font-size:13px; display:block; }
+    .model-card .meta small { color:var(--mut); font-size:11px; }
+    .model-card .tags { display:flex; gap:6px; flex-wrap:wrap; }
+    .model-card .tag { background:#0f0f11; border:1px solid var(--line); padding:3px 8px; border-radius:20px; font-size:11px; color:var(--mut); }
+    .model-card .actions { display:flex; gap:8px; margin-top:8px; }
+    .model-card .actions button { flex:1; padding:8px 12px; border-radius:8px; border:1px solid var(--line); background:var(--panel); color:var(--txt); cursor:pointer; font-weight:600; font-size:12px; }
+    .model-card .actions button.primary { background:var(--gold); color:#000; border-color:var(--gold2); }
+    .model-card .actions button:disabled { opacity:0.5; cursor:not-allowed; }
+    /* HF results */
+    #hf-results .row { display:flex; justify-content:space-between; align-items:center; padding:10px 12px; background:var(--card); border:1px solid var(--line); border-radius:8px; margin:6px 0; }
+    /* Dashboard — LM Studio stats */
+    .stats { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; margin-top:16px; }
+    .stat { background:var(--card); border:1px solid var(--line); border-radius:12px; padding:16px; }
+    .stat b { font-size:22px; display:block; }
+    .stat small { color:var(--mut); font-size:12px; }
+    /* Chat — Ollama */
+    #chat-wrap { display:flex; gap:16px; height:calc(100vh - 140px); }
+    #chat-list { width:240px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:12px; }
+    #chat-main { flex:1; display:flex; flex-direction:column; background:var(--panel); border:1px solid var(--line); border-radius:12px; overflow:hidden; }
+    #chat-out { flex:1; padding:16px; overflow:auto; display:flex; flex-direction:column; gap:12px; }
+    .msg { max-width:80%; padding:10px 14px; border-radius:12px; font-size:13px; line-height:1.5; }
+    .msg.user { align-self:flex-end; background:var(--gold); color:#000; }
+    .msg.bot { align-self:flex-start; background:var(--card); border:1px solid var(--line); }
+    #chat-input-row { display:flex; gap:8px; padding:12px; border-top:1px solid var(--line); }
+    #chat-input { flex:1; background:var(--card); color:var(--txt); border:1px solid var(--line); padding:10px 12px; border-radius:8px; resize:none; outline:none; }
+    #chat-input:focus { border-color:var(--gold); }
+  </style>
+</head>
+<body>
+  <div id="pull-progress-bar"></div>
+  <div id="pull-notify">
+    <div id="pull-notify-title" style="font-weight:700; font-size:13px;"></div>
+    <div id="pull-notify-detail" style="font-size:11px; color:#aaa; margin-top:4px;"></div>
+    <div class="progress-track"><div id="pull-notify-fill" class="progress-fill"></div></div>
+  </div>
+
+  <div id="sidebar">
+    <div class="brand">
+      <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%23b8860b'/%3E%3Ctext x='16' y='21' text-anchor='middle' fill='black' font-weight='800' font-size='14'%3ENX%3C/text%3E%3C/svg%3E" alt="NEMES" />
+      <div><span>NEMES Miner</span><small>v0.2.0 • Sovereign</small></div>
+    </div>
+    <div class="nav">
+      <button data-tab="dashboard" class="active"><span class="icon">◈</span> Dashboard</button>
+      <button data-tab="models"><span class="icon">⬢</span> Discover <span style="margin-left:auto; background:var(--gold); color:#000; padding:2px 6px; border-radius:10px; font-size:10px;">Ollama</span></button>
+      <button data-tab="chat"><span class="icon">💬</span> Chat</button>
+      <button data-tab="mining"><span class="icon">⛏</span> Mining</button>
+    </div>
+    <div class="foot">
+      <div class="gpu" id="gpu-info">GPU: yükleniyor...</div>
+      <div class="status"><span id="komuta-dot" class="dot"></span><span id="komuta-status">Komuta: Bağlanıyor...</span></div>
+      <div style="font-size:11px; color:var(--mut); margin-top:8px;" id="mining-status">Mining: durdu</div>
+    </div>
+  </div>
+
+  <div id="main">
+    <div id="topbar">
+      <div class="title" id="topbar-title">Discover</div>
+      <div class="search" id="topbar-search">
+        <input id="hf-search" placeholder="HF'de ara — qwen, gemma, aya, mistral..." />
+        <button id="hf-search-btn">Ara</button>
+      </div>
+      <span class="badge">Sovereign • 40M vectors</span>
+    </div>
+
+    <div id="tab-dashboard" class="tab active">
+      <h2 style="margin:0;">Komuta Merkezi</h2>
+      <p style="color:var(--mut); font-size:13px;">Komuta sizde, güç madencide. Heartbeat 45sn — merkez olmadan kuş uçmaz.</p>
+      <div class="stats">
+        <div class="stat"><b id="stat-pay">0</b><small>Pay (verified vectors)</small></div>
+        <div class="stat"><b id="stat-hak">0</b><small>API Hakkı</small></div>
+        <div class="stat"><b id="stat-vram">—</b><small>VRAM</small></div>
+      </div>
+      <div style="margin-top:20px; background:var(--panel); border:1px solid var(--line); border-radius:12px; padding:16px;">
+        <b style="font-size:13px;">Canlı Görev</b><div id="live-gorev" style="font-size:12px; color:var(--mut); margin-top:6px;">Komutadan bekleniyor...</div>
+      </div>
+    </div>
+
+    <div id="tab-models" class="tab">
+      <div style="display:flex; justify-content:space-between; align-items:center;">
+        <h2 style="margin:0;">Discover — HF Model Kütüphanesi</h2>
+        <span style="font-size:11px; color:var(--mut);">Ollama gibi: istediğini çek, lokalde çalıştır</span>
+      </div>
+      <div id="hf-results" style="margin-top:12px;"></div>
+      <h3 style="margin:16px 0 8px; font-size:13px; color:var(--mut);">ÖNERİLENLER</h3>
+      <div id="models-list" class="model-grid">yükleniyor...</div>
+    </div>
+
+    <div id="tab-chat" class="tab">
+      <div id="chat-wrap">
+        <div id="chat-list">
+          <b style="font-size:12px;">Modeller</b><div id="chat-model-list" style="margin-top:8px; font-size:12px; color:var(--mut);">Yüklü model yok — Discover’dan indir</div>
+          <div style="margin-top:16px; font-size:11px; color:var(--mut);">RAG her zaman merkeze bağlı — offline gibi görünse de bilgi sizden.</div>
+        </div>
+        <div id="chat-main">
+          <div id="chat-out"><div class="msg bot">Merhaba! Bir model seç ve sor. Örn: “newscrawl’da enflasyon nedir?”</div></div>
+          <div id="chat-input-row">
+            <textarea id="chat-input" rows="1" placeholder="Mesaj yaz... (Enter gönder, Shift+Enter satır)"></textarea>
+            <button id="chat-send" style="background:var(--gold); color:#000; border:0; padding:10px 16px; border-radius:8px; font-weight:700; cursor:pointer;">Gönder</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div id="tab-mining" class="tab">
+      <h2 style="margin:0;">Mining</h2>
+      <p style="color:var(--mut); font-size:13px;">Görev merkezden gelir: <code>beyin_sirasi.py</code> → newscrawl → gut_en → wet_en</p>
+      <div style="display:flex; gap:8px;">
+        <button id="mining-start-btn" style="background:var(--gold); color:#000; border:0; padding:10px 16px; border-radius:8px; font-weight:700; cursor:pointer;">Mining Başlat</button>
+        <button id="mining-stop-btn" style="background:var(--panel); color:var(--txt); border:1px solid var(--line); padding:10px 16px; border-radius:8px; cursor:pointer;">Durdur</button>
+      </div>
+      <div id="mining-log" style="margin-top:12px; background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:12px; font-size:11px; color:#aaa; white-space:pre-wrap; min-height:120px;">Beklemede...</div>
+    </div>
+  </div>
+
+  <script type="module" src="/src/main.ts"></script>
+</body>
+</html>
