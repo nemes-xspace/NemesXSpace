@@ -1,0 +1,40 @@
+# NEMES komuta Herkese Acik Dugum — Caddy (otomatik TLS)
+# Kullanim: alan adini asagiya yaz, `caddy run` (80+443 disari acik olmali).
+# Komuta yerelde :8787'de, P2P :4003'te calisir; TLS burada biter.
+
+# CF Flexible modda CF->origin HTTP gelir; Caddy'nin http->https zorlamasi
+# sonsuz dongu yapar. Kenar zaten HTTPS verdigi icin origin'de kapatildi.
+{
+	auto_https disable_redirects
+}
+
+# Tünel girisi (CF kenarı HTTPS verir, origin'e düz HTTP yeter).
+http://komuta.nemes-x.space {
+	reverse_proxy 127.0.0.1:8787
+
+	request_body {
+		max_size 50MB
+	}
+
+	header {
+		-Server
+		X-Content-Type-Options nosniff
+	}
+}
+
+komuta.nemes-x.space {
+	reverse_proxy 127.0.0.1:8787
+
+	# Kotu niyetli govde siniri (embed kanitlari buyuk olabilir, asiri degil)
+	request_body {
+		max_size 50MB
+	}
+
+	# Hiz siniri Cloudflare WAF'ta (stok Caddy'de rate_limit eklentisi yok).
+	# Cloudflare panel: Security > WAF > /api/* 100/dk/IP kurali (op. kilavuzu).
+
+	header {
+		-Server
+		X-Content-Type-Options nosniff
+	}
+}

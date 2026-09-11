@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = ["miner-core", "miner-cli", "miner-api", "komuta-rs"]
+members = ["miner-core", "miner-cli", "komuta-rs"]
 exclude = ["miner/src-tauri"]
 
 [workspace.dependencies]

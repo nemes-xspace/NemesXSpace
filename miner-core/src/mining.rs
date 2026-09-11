@@ -152,8 +152,14 @@ impl GorevAlici {
             .send()
             .await?;
 
+        // 204 bos govdelidir (is bitmis korpus) — json parse'tan ONCE yakala.
+        // (204, reqwest'te is_success() sayilir; onceki kod bosa json cozmeye
+        // calisip "EOF while parsing" hatasiyla boguluyordu.)
+        if resp.status() == reqwest::StatusCode::NO_CONTENT {
+            return Ok(None); // görev yok, sakin bekle
+        }
         if !resp.status().is_success() {
-            if resp.status() == reqwest::StatusCode::NOT_FOUND || resp.status() == reqwest::StatusCode::NO_CONTENT {
+            if resp.status() == reqwest::StatusCode::NOT_FOUND {
                 return Ok(None); // görev yok
             }
             return Err(anyhow::anyhow!("gorev http {}", resp.status()));
@@ -199,6 +205,23 @@ impl KanitGonderici {
         Ok(())
     }
 
+    /// Parça indir (C7 onarım): relay'den ham baytlar. Boyut doğrulanmaz burada.
+    pub async fn parca_indir(&self, hash: &str) -> anyhow::Result<Vec<u8>> {
+        let url = format!("{}/api/parca/indir/{}", self.base_url.trim_end_matches('/'), hash.trim());
+        let resp = self.client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", self.token))
+            .send()
+            .await?;
+
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let err = resp.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("parca http {}: {}", status, err));
+        }
+        Ok(resp.bytes().await?.to_vec())
+    }
+
     /// Denetim sonucu gönder - taze embedding ile (kosinüsü komuta hesaplar)
     pub async fn denetim_gonder(
         &self,
@@ -233,7 +256,23 @@ impl KanitGonderici {
     }
 }
 
+/// R4/P2P: bosta beklerken uyandi sinyaline de kulak ver (yoksa eski sabit uyku).
+/// Sinyal (veya kanal kapanmasi) gelirse sure dolmadan doner; dongu basi
+/// hemen `gorev_al` yapar. Timeout da normaldir (yeni poll turu).
+async fn bosta_bekle(sure: Duration, uyan_rx: &mut Option<tokio::sync::watch::Receiver<u64>>) {
+    match uyan_rx {
+        Some(rx) => {
+            let _ = tokio::time::timeout(sure, rx.changed()).await;
+        }
+        None => tokio::time::sleep(sure).await,
+    }
+}
+
 /// Ana mining döngüsü - görev al -> embed et -> kanıt gönder
+///
+/// `uyan_rx`: R4/P2P uyandirma sayaci (komuta `nemes/gorev` duyurusu).
+/// None ise eski davranis (sabit 5/10sn uyku). Some ise bosta beklerken
+/// duyuru gelirse hemen uyanip HTTP'den gorevi ceker.
 pub async fn mining_loop(
     gorev_alici: GorevAlici,
     embed_client: EmbedClient,
@@ -242,6 +281,8 @@ pub async fn mining_loop(
     gpu_index: usize,
     durum_tx: tokio::sync::mpsc::Sender<WorkerState>,
     durdur_rx: tokio::sync::watch::Receiver<bool>,
+    depolama_dir: Option<std::path::PathBuf>,
+    mut uyan_rx: Option<tokio::sync::watch::Receiver<u64>>,
 ) -> anyhow::Result<()> {
     let mut islenen = 0u64;
     let baslangic = std::time::Instant::now();
@@ -256,18 +297,19 @@ pub async fn mining_loop(
         let gorev = match gorev_alici.gorev_al().await {
             Ok(Some(g)) => g,
             Ok(None) => {
-                tokio::time::sleep(std::time::Duration::from_secs(5)).await;
+                bosta_bekle(Duration::from_secs(5), &mut uyan_rx).await;
                 continue;
             }
             Err(e) => {
                 eprintln!("[worker-{}] görev alma hatası: {}", worker_id, e);
-                tokio::time::sleep(std::time::Duration::from_secs(10)).await;
+                bosta_bekle(Duration::from_secs(10), &mut uyan_rx).await;
                 continue;
             }
         };
 
-        // Görev tipine göre işle
-        let (vektorler, madde_idler, denetim_refs) = match gorev.tip.as_str() {
+        // Görev tipine göre işle.
+        // Donen: (vektorler, madde_idler, denetim_refs, yedek_refs).
+        let (vektorler, madde_idler, denetim_refs, yedek_refs) = match gorev.tip.as_str() {
             "embed" => {
                 // Payload'u klonla ki birden fazla erişim yapabilelim
                 let payload = gorev.payload.clone();
@@ -294,7 +336,7 @@ pub async fn mining_loop(
                     .map(|arr| arr.iter().filter_map(|v| v.as_u64().map(|u| u as usize)).collect())
                     .unwrap_or_else(|| (0..metinler.len()).collect());
 
-                (embeddings, madde_idler, None)
+                (embeddings, madde_idler, None, None)
             }
             "denetim" => {
                 // Es-dogrulama: ayni metinleri yeniden embed et, taze vektorle raporla.
@@ -323,7 +365,7 @@ pub async fn mining_loop(
                 }
 
                 let embeddings = embed_client.embed_batch(&metinler).await?;
-                (embeddings, madde_idler, Some(refs))
+                (embeddings, madde_idler, Some(refs), None)
             }
             "rag" => {
                 let payload = gorev.payload.as_ref().ok_or_else(|| anyhow::anyhow!("RAG payload eksik"))?;
@@ -338,7 +380,29 @@ pub async fn mining_loop(
                     .await?;
                 
                 let madde_idler = vec![0]; // RAG için tek sonuç
-                (embeddings, madde_idler, None)
+                (embeddings, madde_idler, None, None)
+            }
+            "yedekle" => {
+                // C7 onarim: relay'den parca indir, depolama dizinine hash adiyla yaz.
+                // Dogrulama komutada (sonraki heartbeat raporlar, hash eslesirse onarim kapanir).
+                let payload = gorev.payload.clone().ok_or_else(|| anyhow::anyhow!("yedek payload eksik"))?;
+                let refs: Vec<(String, i64, i64)> = payload.get("yedek")
+                    .and_then(|v| v.as_array())
+                    .map(|arr| arr.iter().filter_map(|o| {
+                        let h = o.get("parca_hash")?.as_str()?.to_string();
+                        if h.len() != 64 || !h.chars().all(|c| c.is_ascii_hexdigit()) {
+                            return None;
+                        }
+                        let b = o.get("boyut")?.as_i64()?;
+                        let oid = o.get("onarim_id")?.as_i64()?;
+                        Some((h, b, oid))
+                    }).collect())
+                    .unwrap_or_default();
+                if refs.is_empty() {
+                    eprintln!("[worker-{}] bos yedek gorevi, atlanıyor", worker_id);
+                    continue;
+                }
+                (Vec::new(), Vec::new(), None, Some(refs))
             }
             _ => {
                 eprintln!("[worker-{}] bilinmeyen görev tipi: {}", worker_id, gorev.tip);
@@ -346,6 +410,40 @@ pub async fn mining_loop(
             }
         };
 
+        // Yedek kolu: indir -> depolama dizinine yaz (ucret heartbeat kapanisinda).
+        if let Some(yrefs) = yedek_refs {
+            match depolama_dir.as_ref() {
+                None => {
+                    eprintln!("[worker-{}] yedek gorevi geldi ama depolama dizini yok (--depolama ver)", worker_id);
+                }
+                Some(ddir) => {
+                    if let Err(e) = std::fs::create_dir_all(ddir) {
+                        eprintln!("[worker-{}] depolama dizini acilamadi: {}", worker_id, e);
+                    } else {
+                        for (h, boyut, oid) in yrefs {
+                            match kanit_gonderici.parca_indir(&h).await {
+                                Ok(veri) => {
+                                    if veri.len() as i64 != boyut {
+                                        eprintln!("[worker-{}] parca boyut uyusmadi (onarim {}): beklenen {} gelen {}", worker_id, oid, boyut, veri.len());
+                                        continue;
+                                    }
+                                    let yol = ddir.join(&h);
+                                    match std::fs::write(&yol, &veri) {
+                                        Ok(()) => {
+                                            islenen += 1;
+                                            eprintln!("[worker-{}] parca indi: {} ({} bayt, onarim {})", worker_id, &h[..12], veri.len(), oid);
+                                        }
+                                        Err(e) => eprintln!("[worker-{}] parca yazilamadi: {}", worker_id, e),
+                                    }
+                                }
+                                Err(e) => eprintln!("[worker-{}] parca indirme hatasi: {}", worker_id, e),
+                            }
+                        }
+                    }
+                }
+            }
+            // Durum gonderimi icin asagidaki ortak bloga dus.
+        } else
         // Denetim kolu: taze vektorle sonuc raporla (kosinus komutada)
         if let Some(refs) = denetim_refs {
             for ((vektor, _madde_id), (ref_gorev, ref_madde)) in vektorler.into_iter().zip(madde_idler.into_iter()).zip(refs.into_iter()) {

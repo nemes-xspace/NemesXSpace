@@ -2,6 +2,9 @@
 pub mod mining;
 pub mod resources;
 pub mod llama;
+pub mod depolama;
+
+pub use depolama::parca_listele;
 pub mod shard;
 
 pub use mining::{int8_nicele, MiningStats, WorkerState, Gorev, Kanit, EmbedClient, GorevAlici, KanitGonderici, DenetimSonucResp, mining_loop};

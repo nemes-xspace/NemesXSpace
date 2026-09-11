@@ -1,0 +1,30 @@
+# NEMES Herkese Acik Komuta Dugumu (ornek birim dosyasi)
+# Kurulum: bu dosyayi /etc/systemd/system/nemes-komuta-public.service yap,
+# YOLLARI ve TOKEN'lari duzenle, `systemctl enable --now` ile baslat.
+# NOT: testnet birimiyle (nemes-komuta) AYNI ANDA calistirma (port cakisir)
+# ya da PORT/P2P_PORT/DB_PATH'i farkli ver.
+[Unit]
+Description=NEMES Public Komuta Dugumu (topluluk)
+After=network.target
+Wants=network.target
+
+[Service]
+User=d3str0y1ng
+WorkingDirectory=/home/d3str0y1ng/nemes-public
+Environment=DB_PATH=/home/d3str0y1ng/nemes-public/komuta.db
+Environment=GOREV_CORPUS=tr
+Environment=PORT=8787
+Environment=P2P_PORT=4003
+Environment=EMBED_API=http://127.0.0.1:1241
+Environment=RUST_LOG=info
+# P2P gorev duyurulari acik (kapatmak icin =0 yap)
+Environment=P2P_GOREV_YAYIN=1
+ExecStart=/home/d3str0y1ng/nemes-public/bin/komuta-rs
+Restart=always
+RestartSec=10
+# Kaynak tavani (ev makinesi dostu)
+MemoryMax=12G
+CPUQuota=400%
+
+[Install]
+WantedBy=multi-user.target

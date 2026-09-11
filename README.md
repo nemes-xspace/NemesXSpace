@@ -93,7 +93,7 @@
 
 Hepsi aynı %100 ana beyinden damıtılacak — stabil olan seçilecek, birden fazla mod zenginlik gösterecek.
 
-**Finansman (2 aşamalı, 28 Ağu kararı — `docs/odul-stratejisi.md`):**
+**Finansman (2 aşamalı, 28 Ağu kararı — `docs/TOKENOMI.md`):**
 - **Faz 1 (bootstrap, madenci kazanana kadar):** Seçenek 2 — Madenci = Müşteri, paylar API hakkı olarak verilir, hazineye dokunulmaz
 - **Faz 2 (sürdürülebilir):** Seçenek 1 — Hazine + Enterprise × %50 → nakit payout
 

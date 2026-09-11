@@ -11,6 +11,7 @@ path = "src/main.rs"
 
 [dependencies]
 miner-core = { path = "../miner-core" }
+nemes-p2p = { path = "../../nemes-p2p/nemes-p2p" }
 tokio = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }

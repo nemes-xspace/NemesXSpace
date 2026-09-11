@@ -1,0 +1,178 @@
+# NEMES-X ALTYAPI KAYIT DOSYASI
+> Tek hakikat kaynağı (teknik altyapı için). Proje vizyonu için `00-PROJE-TANIMI.md`
+> Ödül stratejisi için `docs/TOKENOMI.md` geçerlidir.
+> Oluşturuldu: 2026-09-06 (altyapı elden geçirme sonrası, build modunda icra edildi)
+
+## 0. Garanti kuralları (değişikliklerde uyulur)
+1. Önce kaydet, sonra kes — bu dosya her fazda güncellenir.
+2. Eğitim sürerken GPU'ya dokunulmaz; gerekmedikçe servis restart edilmez.
+3. Canlı DB'ye `ALTER/DROP` yok — sadece `CREATE TABLE` ve `ADD COLUMN`.
+4. Her migration öncesi son yedeğin tazeliği doğrulanır (00:18 timer + elle tetik).
+5. Test anahtarları (`cf1339...`, `/tmp/*`) mainnet kararlarında kullanılmaz.
+6. **Merkezi sunucu YOK (VPS dahil):** ağ, madencilerin birbirine ördüğü
+   örümcek ağıdır. Hiçbir düğüm ayrıcalıklı değildir; tohum listesi dahil
+   her adres değiştirilebilir listedir. Tek noktaya bağımlı tasarım
+   reddedilir — tohum-0 (kurucu makinesi) dahil her düğüm düşebilir, ağ sürer.
+7. **10-gün otonomi onayı (10 Eyl 2026, 1 hafta geçerli):** workspace + wiki +
+   site dosyalarında okuma/yazma, servis restart, main'e push serbest.
+   YASAK: disk silme, para harcama, dışarı mesaj atma. Push tokeni 1 hafta açık.
+
+## 1. Envanter (2026-09-06 doğrulandı)
+
+### 1.1 Komuta (`NemesXSpace/komuta-rs`, 1776 satır)
+- 17 endpoint: health, kayit, heartbeat, gorev, kanit, status, bakiye, arz,
+  ledger, komut, denetim, denetim/sonuc, shard/ilan, shard, ara (POST+GET).
+- Migration 001–007 uygulanmış. Canlı DB: ~1.4GB.
+- Endpoint'ler: `:8787` HTTP + `:4003` P2P (nemes/shard abonesi).
+
+### 1.2 Miner (`miner-core` + `miner-cli`)
+- `miner-core`: mining.rs (466) + shard.rs (173) + llama.rs (277) + resources.rs.
+- `miner-cli`: 435 satır — keygen, mine --simple (gerçek döngü), re-claim (30sn yoklama).
+- Canlı: 2 miner (systemd), embed 1241/1242.
+
+### 1.3 P2P (`nemes-p2p` workspace)
+- GERÇEK: `nemes-core` (types/crypto/protocol/shard + MASTER_PUBKEY), `nemes-p2p`
+  (TCP+Noise+Yamux+Gossipsub+mDNS+Identify), `nemes-cli` (keygen/node/imzala/komut-gonder).
+- İSKELET (0–95 satır, içleri boş): nemes-consensus, nemes-embedding,
+  nemes-node, nemes-protocol (0 satır!), nemes-storage, nemes-wallet.
+- Karar bekleniyor: doldur veya workspace'ten çıkar (bkz. §3 Soru 3).
+
+### 1.4 Model hattı
+- `model/veri_kur.py` → `/srv/beyin/model-v01/` (train 1.1GB, 2.46M çift).
+- `nemes-egitim/`: Qwen3-1.7B-Base + train.py (QLoRA) + cevapla.py + sorular.json.
+- Tam eğitim sürüyor (adapter-v01, ~5900 adım). GPU %100.
+- `model/hf-nemes-free-{1b,3b,8b,30b}/`: BOŞ (sadece README) — damıtma planı
+  (`damitma-plani.md`, 70B Sovereign öğretmen varsayıyor) bu oturumun Qwen3-LoRA
+  hattıyla BİRLEŞTİRİLMEDİ. Karar bekleniyor (bkz. §3 Soru 4).
+
+### 1.5 Embed
+- 6× LM Studio llama-server (1241–1246, `beyin_bekci.service`).
+- Self-contained bundle `/home/d3str0y1ng/nemes-bundle` (194MB, CUDA 12.6, sm_61),
+  `nemes-embed-bundle.service` ile :1251'de canlı. LM Studio ile kosinüs 1.000000.
+
+### 1.6 Ops
+- İzleme: `nemes-izleme-hizli.timer` (15dk) + `nemes-izleme-gunluk.timer` (06:00).
+- Yedek: `komuta-backup.timer` (günlük 00:18), `/home/d3str0y1ng/nemes-testnet/yedek/`.
+- Testnet dosyaları: `/home/d3str0y1ng/nemes-testnet/` (komuta.db, bin/, *.key, *.token).
+- Paralel hatlar (bu oturumda dokunulmadı): Tauri `miner/` + `miner-api/` (557 satır),
+  Python `/srv/beyin/kaynaklar/komuta_api.py`, `mini7-dongu.service` (/srv/beyin/testler).
+
+## 2. Yapılacak değişiklikler (konsolide)
+
+### Güvenlik (önce)
+- [x] C1. Kökteki `nemes-x.2026-08-24.private-key.pem` kasaya taşındı
+  (`/home/d3str0y1ng/.nemes-kasa/`, 700/600). TESPİT (içerik açılmadı):
+  RSA-2048 anahtarı (Ed25519 DEĞİL → NEMES master imza anahtarı olamaz),
+  Açık anahtar SHA256: `9e5fd207f83108b5f830353bed160b342a15456190f57c1660d9d358d60a1f99`,
+  repo içinde referansı yok. Muhtemelen SSH/TLS artığı. Ne olduğu OPERATÖRE
+  sorulacak (aşağıda Soru 5).
+- [x] C2. Ölü dosya `nemes-testnet/+%F-%H%M).db` (0 bayt) silindi.
+
+### Otonom depolama katmanı
+- [ ] C4. Disk sınavı + katman ayrımı (`miner keygen --storage`, 100GB challenge).
+- [ ] C5. Migration 008: `parcalar`, `parca_yerleri`, `miners.depolama_kota`.
+- [ ] C6. Heartbeat'e disk raporu + ölüm ilanı (3 kaçırma).
+- [ ] C7. `tip:"yedekle"` onarım döngüsü (kopya<5 ise transfer + ücret).
+- [ ] C8. Yoklama endpoint'i (`POST /api/depolama/yoklama`) + düşürme kuralı.
+
+### Temizlik (karar sonrası)
+- [ ] C9. İskelet 6 crate kararı (Soru 3).
+- [ ] C10. Tauri/Python hatları kararı (Soru 2) + emeklilik uygulaması.
+- [ ] C11. Bu dosya her fazda güncellenir (bu madde dahil).
+
+## 3. Açık karar soruları
+1. **Tokenomik (KARAR VERİLDİ 08 Eyl — coin+halving):** Mevcut coin+halving
+   kalır (`BATCH_ODUL_TABAN_MIKRO=2000`, `HALVING_BATCH=5M`). API-hakkı
+   alternatifi elendi. Ledger/bakiye/arz endpoint'leri coin defteri olarak
+   devam. (`docs/TOKENOMI.md` Faz 1 = pay birikimi, Faz 2 = H = gelir×%50 nakit.)
+   Tokenomik KİLİTLİ (09 Eyl): tavan 210M, era1 8 NEMES/batch, Enterprise
+   fiyatları, Faz geçiş kriteri. Testnet `0.002` ile sürer; mainnet sabitleri
+   lansmanda geçirilir. Eski `odul-stratejisi.md` arşivde.
+2. **Tauri `miner/` + `miner-api` + Python `komuta_api.py` (KARAR VERİLDİ 08 Eyl — dondur):**
+   Tek hat Rust CLI (`nemes-miner`). `miner-api` workspace members'dan çıkarıldı
+   (klasör duruyor, derlenmiyor); `komuta_api.py` → `komuta_api.py.donduruldu`;
+   Tauri `miner/` zaten exclude'daydı, ellemedi. Hiçbiri canlıda değildi.
+3. **İskelet crate'ler (KARAR VERİLDİ 08 Eyl — çıkar):** consensus, embedding,
+   node, protocol (0 satır), storage, wallet → `nemes-p2p/_arsiv/` altına
+   taşındı. Kod referansı yoktu (derlenmiyorlardı bile). İhtiyaçta geri alınır.
+4. **Model hattı birleşmesi (KARAR VERİLDİ 08 Eyl — Qwen3-LoRA kilit):**
+   `model/damitma-plani.md` → `damitma-plani.ERTELENDI.md`. adapter-v01
+   (5900 adım, loss 1.48) ana hat; HF yükleme/benchmark buradan planlanacak.
+5. **Kasaya taşınan .pem (KARAR VERİLDİ 09 Eyl — arşiv):** `nemes-x.2026-08-24.private-key.pem`
+   (RSA-2048, Ed25519 değil → master olamaz) → `~/.nemes-kasa/arsiv/` (700).
+   Muhtemelen SSL/TLS artığı. Gerekiyorsa operatör bulur.
+6. **Sonraki korpus (GÜNCEL 09 Eyl):** wiki_tr/newscrawl/gut_en bitti + FAISS'li.
+   cc100_tr embed'de (12 işçi, bitince merge+FAISS). wet_en atlandı (A kararı),
+   paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
+
+## 4. Faz günlüğü
+- 2026-09-09: **Güvenlik mimarisi kodlandı (deploy bekliyor)** — docs/GUVENLIK-MIMARISI.md +
+  migration 011 (kor_esleme/kanaryalar/kanarya_dagitim/kara_liste, kopya DB'de
+  test edildi) + kör ID (dagitim basina rastgele kor, kanit/denetim donusunde
+  cozum) + corpus hash kodu + kanarya ekici (%4, negatif sentetik ID) +
+  `/api/kanarya/kontrol` + komut `imha` (ban+pay sifir) / `affet` genisletme +
+  kara liste kapilari (gorev+kanit) + log hijyeni (metin yok, dogrulandi).
+- 2026-09-09: **Güvenlik deploy edildi** — komuta restart (PID 1551458, hata yok),
+  migration 011 canlıda (4 tablo + 5 kanarya), `/api/kanarya/kontrol` provası
+  yeşil (`eslesti:true`), miner'lar bağlı. Eski binary `.20260909-guvenlik.bak`'ta.
+- 2026-09-08: **S2/S3/S4 kapatıldı** — miner-api members'dan çıkarıldı,
+  komuta_api.py donduruldu, 6 iskelet crate `_arsiv/`'de, damıtma planı
+  ertelendi (Qwen3-LoRA kilit). `cargo check --workspace` temiz. Hepsi geri
+  alınabilir (silme yok, taşıma var).
+- 2026-09-08: **R4/P2P görev dağıtımı kodlandı (deploy bekliyor)** — `nemes/gorev`
+  GossipSub: lib abone listesine eklendi + `GOREV_TOPIC`; komuta `gorev_kaydet`
+  sonrası hafif duyuru (`gorev_id`+corpus, hassas yük yok) kuyruğa atar,
+  shard-abone görevi mesh'e yayınlar (`P2P_GOREV_YAYIN=0` ile kapatılabilir);
+  miner `--p2p-dinle` ile dinleyip 5/10sn poll yerine anında uyanır
+  (default kapalı, canlı miner davranışı değişmez). `cargo check` + release
+  build yeşil (`target/release/komuta-rs`, `nemes-miner`). Canlıya deploy
+  (komuta+miner restart) ONAY bekliyor. Sıradaki: deploy +   mesh provası.
+- 2026-09-08: **R4/P2P deploy edildi** — eski binary'ler `.20260908.bak`'ta,
+  servisler restart (komuta PID 1098778, :8787+:4003 canlı, hata yok).
+  Binary kanıtı: `strings`te `nemes/gorev`, miner `--p2p-dinle` flag canlı.
+  Canlı mesh provası kısmi: corpus tr tükenmiş (HTTP 204, miner'lar
+  `bekleniyor`), dağıtım olmayınca duyuru da ateşlenmedi — ilk gerçek
+  dağıtımda otomatik ateşlenecek. Miner'larda `--p2p-dinle` bilerek kapalı
+  (yeni corpus gelince açılacak).
+- 2026-09-07: **CPU guc orani:** tum policy'lerde `scaling_max_freq=2960000` (2.96GHz
+  = donanim maksimumunun ~%60'i, GPU ile ayni oran). NOT: tek sayili cekirdekler
+  SMT kardesidir, zamanlayici bilerek bos tutar (isi tasarrufu) — zorla yayma
+  YAPILMADI (isiyi artirirdi). Reboot sonrasi governor powersave'a donerse
+  `cpupower frequency-set -g powersave` + yukaridaki max deger tekrar uygulanir.
+- 2026-09-07: **GPU güç tavanı:** 250W → 200W → **150W** (`nvidia-smi -pl`), persistence
+  mode açık. NOT: reboot sonrası tavan sıfırlanırsa `sudo nvidia-smi -i 0 -pl 150`
+  tekrar uygulanır. Eğitim ~%25-35 yavaşlar, hesap buna göre yapılır.
+- 2026-09-07: **C8 tamamlandı** — yoklama döngüsü canlı: migration 010
+  (`yoklamalar`), 5dk arka plan görevi (süre-doldu kapatma + dusurme kontrolu +
+  tur limiti 3), `GET/POST /api/depolama/yoklama[/sonuc]` + hedefli
+  `/uret` endpoint'i, miner 60sn tick'te otomatik cevaplar
+  (`parca_hash_aralik`, 9 test yeşil). Prova: gecti→kilit, 2×fail→kota=0
+  (dusuruldu:true), sunucu-hesaplı kosinüs eşiği. Canlıda 30 parça × 2 kopya
+  artık otonom denetimde. Sıradaki: Soru 6 (sonraki korpus) + R1 tokenomik kararı.
+- 2026-09-07: **C7 tamamlandı** — onarım döngüsü canlı: tohum (yedek→64MB parça,
+  yedek-dizini hapsi), `GET /api/parca/indir`, `tip:"yedekle"` dağıtımı (kota>0,
+  kopya<3), heartbeat kapanış + 100 mikro ücret, ölüm eşiği 300sn. Canlı kanıt:
+  46 parça tohumlandı, 60 onarım kapandı, 2'şer kopya, 6000 mikro ücret, A==B
+  bayt-bayt aynı. Miner `--depolama` + unit'lere eklendi, binary'ler deploy edildi.
+- 2026-09-06: **C6 tamamlandı** — heartbeat disk raporu iki taraflı: komuta
+  `HeartbeatReq{parcalar,depolama_kota}` kabul eder (upsert + kota günceller,
+  bozuk hash atlar, bodsuz gövde geriye uyumlu); miner `mine --depolama` ile
+  60sn'de taahhut+kota+parça listesi bildirir. Prova (kopya DB): 2 parça kaydı,
+  kota 100GiB, miner logunda "1 parca bildirildi". Sıradaki: C7 onarım döngüsü.
+- 2026-09-06: Kayıt dosyası oluşturuldu. C1+C2 uygulandı. Yedek teyit edildi (00:18, 1.5GB).
+- 2026-09-06: **C4 tamamlandı** — `miner-core/src/depolama.rs` (baraj 100GiB, blake3
+  sınavı yaz+oku+dogrula+sil, taahhut JSON) + `miner keygen --storage --yol --boyut-mb`.
+  9/9 miner-core testi geçiyor. Canlı prova: 333GB diskte 64MB sınav geçti, taahhut
+  yazıldı, sınav artığı silindi.
+- 2026-09-06: **C5 tamamlandı** — migration 008 (`parcalar`, `parca_yerleri`,
+  `miners.depolama_kota`). Yol üstünde checksum onarımı gerekti (001–007 dosyaları
+  commit sonrası EOF düzeltmesi yemiş, sqlx reddetti): kopya DB'de prova edildi,
+  taze yedek (14:18) alındı, canlıya uygulandı. Veri kaybı yok.
+- 2026-09-06: **MİLATTIR — wiki_tr %100 kapsama.** 975.570 uygun maddenin tamamı
+  kanıtlandı (976.461 kanıt, 891 tarihsel çift). Cursor wiki sonuna dayandı.
+- 2026-09-06: **Süpürme tıkanıklığı düzeltildi.** Sınırsız tarama penceresi dağıtımı
+  kilitliyordu (~38 saattir kimse görev alamıyordu). Pencere 5000 id ile
+  sınırlandı. Kalan yavaş sorgular = vektör havuzu tazeleme (2 dk'da bir, arka plan).
+- 2026-09-06: **Miner 204 hatası düzeltildi.** `is_success()` 204'ü geçirip boş
+  gövdeyi JSON parse ediyordu (sonsuz EOF hatası). Artık temiz bekleme.
+  Sıradaki: C7 (onarım döngüsü) + SONRAKİ KORPUS kararı (Soru 6).

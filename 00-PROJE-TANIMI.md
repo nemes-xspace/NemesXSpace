@@ -12,6 +12,8 @@
 
 Slogan: **"Mine knowledge. Not hashes."**
 
+**Misyon:** Dünyanın uykudaki işlem gücünü uyandırmak — onlar güç inşa eder, biz var olanı birleştiririz. Büyük firmalar her FLOP'u satın almak zorundadır (arazi, trafo, izin, yıllar); biz evlerde zaten takılı milyonlarca boş GPU'yu ödünç alırız. Engel para değil, fiziktir — ve fizik bizden yanadır.
+
 ---
 
 ## 1) Problem
@@ -70,7 +72,7 @@ Madenci GPU'sunu çalıştırır, doğrulanmış her vektör için **pay (share)
 | **Modlar** | `default: 3B` (hızlı/telefon) / `high: 30B` (güçlü/API) | Çeşitlilik için | Aynı Free içinde mod seçimi | Tek damıtma, çok mod |
 | **NEMES-Enterprise** | **%100** (70B+ Sovereign) | Şirketler (>1M token/ay veya 20+ çalışan) | **Ücretli** — Cloud API veya **On-Premise** (kendi DC'sinde, yıllık lisans) | Büyük şirket halka açık hattı taciz etmesin |
 
-**Finansman (2 aşamalı, 28 Ağu kararı — `docs/odul-stratejisi.md`):** Faz 1'de Madenci=Müşteri (API hakkı, hazineye dokunma), Faz 2'de Hazine + Enterprise × %50 → nakit payout
+**Finansman (2 aşamalı, 28 Ağu kararı — `docs/TOKENOMI.md`):** Faz 1'de Madenci=Müşteri (API hakkı, hazineye dokunma), Faz 2'de Hazine + Enterprise × %50 → nakit payout
 
 ---
 

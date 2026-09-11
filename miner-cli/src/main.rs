@@ -29,6 +29,15 @@ enum Commands {
         /// Farkli yol (ayni makinede 2 miner testi icin).
         #[arg(long, default_value = "")]
         anahtar: String,
+        /// Depolama katmani kabulu: 100GB baraji + disk sinavi + taahhut.
+        #[arg(long)]
+        storage: bool,
+        /// Depolama dizini (varsayilan ~/.nemes/depolama).
+        #[arg(long, default_value = "")]
+        yol: String,
+        /// Sinav boyutu MB (1-10240, varsayilan 1024).
+        #[arg(long, default_value_t = 1024)]
+        boyut_mb: u64,
     },
     /// Madenciliği başlat — Full TUI (htop gibi) veya --simple (gercek is)
     Mine {
@@ -57,6 +66,14 @@ enum Commands {
         /// P2P relay portu (0 = rastgele).
         #[arg(long, default_value_t = 0)]
         p2p_port: u16,
+        /// P2P gorev duyurusu dinle (nemes/gorev): duyuru gelince beklemeden
+        /// HTTP'den gorevi cek. Kapaliyken eski poll (5/10sn) aynen calisir.
+        #[arg(long, default_value_t = false)]
+        p2p_dinle: bool,
+        /// Depolama dizini (taahhut + parcalar). Bos ise ~/.nemes/depolama;
+        /// taahhut yoksa heartbeat parcasiz gider (compute-only).
+        #[arg(long, default_value = "")]
+        depolama: String,
     },
     /// Durum göster
     Status {
@@ -87,22 +104,44 @@ async fn main() -> anyhow::Result<()> {
             println!("→ {} indiriliyor (HF) — ilerleme için miner Tauri kullan veya `nemes-miner` GUI", model);
             println!("  Gerçek indirme şu an Tauri miner’da (HF GGUF pull). CLI pull yakında eklenecek.");
         }
-        Some(Commands::Keygen { anahtar }) => {
+        Some(Commands::Keygen { anahtar, storage, yol: depolama_yolu_flag, boyut_mb }) => {
             use miner_core::{anahtar_yolu, anahtar_yukle_veya_uret, pubkey_b64};
-            let yol = if anahtar.is_empty() {
+            let kyol = if anahtar.is_empty() {
                 anahtar_yolu()
             } else {
                 std::path::PathBuf::from(&anahtar)
             };
-            let sk = anahtar_yukle_veya_uret(&yol)?;
-            println!("anahtar: {}", yol.display());
-            println!("pubkey_b64: {}", pubkey_b64(&sk));
+            let sk = anahtar_yukle_veya_uret(&kyol)?;
+            let pk = pubkey_b64(&sk);
+            println!("anahtar: {}", kyol.display());
+            println!("pubkey_b64: {}", pk);
             println!("(komuta ilk shard ilaninda bu pubkey'i miner_id'ye baglar - TOFU)");
+            if storage {
+                use miner_core::depolama;
+                use miner_core::shard::simdi_ms;
+                let dyol = if depolama_yolu_flag.is_empty() {
+                    depolama::varsayilan_depolama_yolu()
+                } else {
+                    std::path::PathBuf::from(&depolama_yolu_flag)
+                };
+                println!("depolama dizini: {}", dyol.display());
+                let bos = depolama::bos_alan_byte(&dyol)?;
+                println!("bos alan: {:.1} GB (baraj: {:.0} GB)", depolama::gb(bos), depolama::gb(depolama::MIN_KOTA_BYTE));
+                if bos < depolama::MIN_KOTA_BYTE {
+                    anyhow::bail!("baraj alti: 100GB bos alan gerekli");
+                }
+                println!("sinav basliyor ({} MB yaz+oku)...", boyut_mb);
+                let h = depolama::sinav(&dyol, boyut_mb)?;
+                println!("sinav gecti: blake3={}...", &h[..16]);
+                let tyol = depolama::taahhut_yaz(&dyol, depolama::MIN_KOTA_BYTE, &pk, &h, simdi_ms())?;
+                println!("taahhut: {}", tyol.display());
+                println!("KATMAN: storage (komuta C5 sonrasi bu taahhutu isteyecek)");
+            }
         }
-        Some(Commands::Mine { gpu, simple, komuta, token, embed_api, model, corpus, anahtar, shard_adet, p2p_port }) => {
+        Some(Commands::Mine { gpu, simple, komuta, token, embed_api, model, corpus, anahtar, shard_adet, p2p_port, p2p_dinle, depolama }) => {
             let token = token_coz(&token)?;
             if simple {
-                simple_mine(&gpu, &komuta, &token, &embed_api, &model, &corpus, &anahtar, shard_adet, p2p_port).await?;
+                simple_mine(&gpu, &komuta, &token, &embed_api, &model, &corpus, &anahtar, shard_adet, p2p_port, p2p_dinle, &depolama).await?;
             } else {
                 full_tui_mine(&gpu, &komuta).await?;
             }
@@ -176,10 +215,23 @@ async fn miner_id_ogren(komuta: &str, token: &str) -> anyhow::Result<String> {
 }
 
 // ——— Basit log (xmrig klasik) — GERCEK IS: gorev al -> embed -> kanit ---
-async fn simple_mine(_gpu: &str, komuta: &str, token: &str, embed_api: &str, model: &str, corpus: &str, anahtar: &str, shard_adet: i64, p2p_port: u16) -> anyhow::Result<()> {
+async fn simple_mine(_gpu: &str, komuta: &str, token: &str, embed_api: &str, model: &str, corpus: &str, anahtar: &str, shard_adet: i64, p2p_port: u16, p2p_dinle: bool, depolama: &str) -> anyhow::Result<()> {
     use miner_core::{mining_loop, EmbedClient, GorevAlici, KanitGonderici};
     use miner_core::{anahtar_yolu, anahtar_yukle_veya_uret, ilan_imzala, simdi_ms, ShardRelay, SigningKey};
+    use miner_core::depolama as dep;
     use indicatif::{ProgressBar, ProgressStyle};
+
+    // Depolama katmani: taahhut varsa heartbeat'e parca raporu eklenir (C6).
+    let dep_yol: std::path::PathBuf = if depolama.is_empty() {
+        dep::varsayilan_depolama_yolu()
+    } else {
+        std::path::PathBuf::from(depolama)
+    };
+    let dep_taahhut = dep::taahhut_oku(&dep_yol);
+    if let Some(ref t) = dep_taahhut {
+        println!("◈ depolama katmani: {} ({:.0} GB taahhut)", dep_yol.display(), dep::gb(t.kota_byte));
+    }
+    let mut dep_son_nabiz = std::time::Instant::now();
 
     // Shard relay: uzun omurlu P2P node + startup'ta goreli claim.
     // Kapali dongu: 30 sn'de bir /api/shard yoklanir, aktif ilan kalmadiysa
@@ -234,7 +286,58 @@ async fn simple_mine(_gpu: &str, komuta: &str, token: &str, embed_api: &str, mod
     let kanit_gonderici = KanitGonderici::new(komuta, token);
     let (durum_tx, mut durum_rx) = tokio::sync::mpsc::channel(32);
     let (durdur_tx, durdur_rx) = tokio::sync::watch::channel(false);
-    let isci = tokio::spawn(mining_loop(gorev_alici, embed_client, kanit_gonderici, 0, 0, durum_tx, durdur_rx));
+    // Yedek kolu depolama dizini: taahhut varsa kullan (yoksa C7 gorevleri atlanir).
+    let dep_dir: Option<std::path::PathBuf> = {
+        let d: std::path::PathBuf = if depolama.is_empty() {
+            miner_core::depolama::varsayilan_depolama_yolu()
+        } else {
+            std::path::PathBuf::from(depolama)
+        };
+        if miner_core::depolama::taahhut_oku(&d).is_some() {
+            Some(d)
+        } else {
+            None
+        }
+    };
+    // R4/P2P: gorev duyuru dinleyicisi (opsiyonel, default kapali).
+    // Acikken nemes/gorev mesh duyurusu gelince mining dongusu beklemeden
+    // uyanir. Kapaliyken davranis tamamen eski poll'dur (canli miner etkilenmez).
+    let uyan_rx: Option<tokio::sync::watch::Receiver<u64>> = if p2p_dinle {
+        let (tx, rx) = tokio::sync::watch::channel(0u64);
+        tokio::spawn(async move {
+            let mut sayac = 0u64;
+            let mut node = match nemes_p2p::P2PNode::new(nemes_p2p::P2PConfig { port: p2p_port, enable_mdns: true }).await {
+                Ok(n) => n,
+                Err(e) => {
+                    eprintln!("p2p dinleyici acilamadi (port {}): {} — poll ile devam", p2p_port, e);
+                    return;
+                }
+            };
+            let mut ev_rx = match node.take_event_receiver() {
+                Some(r) => r,
+                None => return,
+            };
+            println!("◈ gorev duyurusu dinleniyor: {} (port {})", nemes_p2p::GOREV_TOPIC, p2p_port);
+            loop {
+                if node.run_for(5).await.is_err() {
+                    tokio::time::sleep(Duration::from_secs(5)).await;
+                    continue;
+                }
+                while let Ok(ev) = ev_rx.try_recv() {
+                    if let nemes_p2p::NetworkEvent::MessageReceived { topic, .. } = ev {
+                        if topic == nemes_p2p::GOREV_TOPIC {
+                            sayac += 1;
+                            let _ = tx.send(sayac);
+                        }
+                    }
+                }
+            }
+        });
+        Some(rx)
+    } else {
+        None
+    };
+    let isci = tokio::spawn(mining_loop(gorev_alici, embed_client, kanit_gonderici, 0, 0, durum_tx, durdur_rx, dep_dir, uyan_rx));
     tokio::pin!(isci);
     let mut toplam: u64 = 0;
     let mut son_hiz = 0.0f32;
@@ -295,6 +398,72 @@ async fn simple_mine(_gpu: &str, komuta: &str, token: &str, embed_api: &str, mod
                     match shard_claim(sk, mid) {
                         Ok(()) => println!("◈ re-claim yayinlandi: {} +{} id", corpus, shard_adet),
                         Err(e) => eprintln!("re-claim atlandi: {}", e),
+                    }
+                }
+            }
+        }
+        // Heartbeat + disk raporu (60 sn): taahhut varsa parca listesiyle.
+        if dep_son_nabiz.elapsed() >= Duration::from_secs(60) {
+            dep_son_nabiz = std::time::Instant::now();
+            let (parcalar, kota): (Vec<serde_json::Value>, Option<i64>) = match dep_taahhut.as_ref() {
+                Some(t) => {
+                    let liste: Vec<serde_json::Value> = dep::parca_listele(&dep_yol)
+                        .into_iter()
+                        .map(|(h, b)| serde_json::json!({"parca_hash": h, "boyut": b}))
+                        .collect();
+                    (liste, Some(t.kota_byte as i64))
+                }
+                None => (Vec::new(), None),
+            };
+            match shard_http
+                .post(format!("{}/api/heartbeat", komuta.trim_end_matches('/')))
+                .header("Authorization", format!("Bearer {}", token))
+                .json(&serde_json::json!({"parcalar": parcalar, "depolama_kota": kota}))
+                .send()
+                .await
+            {
+                Ok(r) => {
+                    if !r.status().is_success() {
+                        eprintln!("heartbeat http {}", r.status());
+                    } else if !parcalar.is_empty() {
+                        println!("◈ nabiz: {} parca bildirildi", parcalar.len());
+                    }
+                }
+                Err(e) => eprintln!("heartbeat hatasi: {}", e),
+            }
+            // C8 yoklama: acik challenge varsa aralik hash'le, cevabi gonder.
+            if dep_taahhut.is_some() {
+                let yurl = format!("{}/api/depolama/yoklama", komuta.trim_end_matches('/'));
+                if let Ok(r) = shard_http
+                    .get(&yurl)
+                    .header("Authorization", format!("Bearer {}", token))
+                    .send()
+                    .await
+                {
+                    if r.status().as_u16() == 200 {
+                        if let Ok(j) = r.json::<serde_json::Value>().await {
+                            let id = j.get("id").and_then(|v| v.as_i64()).unwrap_or(0);
+                            let ph = j.get("parca_hash").and_then(|v| v.as_str()).unwrap_or("");
+                            let off = j.get("offset").and_then(|v| v.as_u64()).unwrap_or(0);
+                            let len = j.get("uzunluk").and_then(|v| v.as_u64()).unwrap_or(0);
+                            if id > 0 && !ph.is_empty() && len > 0 {
+                                match miner_core::depolama::parca_hash_aralik(&dep_yol, ph, off, len) {
+                                    Ok(h) => {
+                                        let s = shard_http
+                                            .post(format!("{}/api/depolama/yoklama/sonuc", komuta.trim_end_matches('/')))
+                                            .header("Authorization", format!("Bearer {}", token))
+                                            .json(&serde_json::json!({"id": id, "hash": h}))
+                                            .send()
+                                            .await;
+                                        match s {
+                                            Ok(rr) => println!("◈ yoklama cevabi: {}", rr.text().await.unwrap_or_default().chars().take(80).collect::<String>()),
+                                            Err(e) => eprintln!("yoklama sonuc hatasi: {}", e),
+                                        }
+                                    }
+                                    Err(e) => eprintln!("yoklama aralik hatasi (dosya kayip olabilir): {}", e),
+                                }
+                            }
+                        }
                     }
                 }
             }

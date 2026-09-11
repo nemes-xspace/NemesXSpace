@@ -21,5 +21,6 @@ which = "4.0"
 ed25519-dalek = "2"
 getrandom = "0.2"
 hex = "0.4"
+blake3 = "1"
 nemes-core = { path = "../../nemes-p2p/nemes-core" }
 nemes-p2p = { path = "../../nemes-p2p/nemes-p2p" }

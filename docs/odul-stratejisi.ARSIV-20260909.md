@@ -35,3 +35,8 @@
 3. Enterprise geliri gelince nakde geçmek güven verir ("artık gerçek para kazanıyorsun")
 
 *Kaynak: 28 Ağu sohbet kararı — NemesXSpace/README ve 00-PROJE-TANIMI ile senkron.*
+
+---
+## ARŞİV NOTU (09 Eyl 2026)
+Bu belge `TOKENOMI.md v1.0-KİLİTLİ` ile yürürlükten kalkmıştır (R1 coin+halving
+kararı; Faz 1 API-hakkı ifadesi geçersizdir). Tarihçe için saklanır.

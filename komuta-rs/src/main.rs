@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use sqlx::{SqlitePool, Row, query_as};
 use sqlx::sqlite::SqlitePoolOptions;
 use nemes_core::shard::ShardIlan;
-use nemes_p2p::{NetworkEvent, P2PConfig, P2PNode};
+use nemes_p2p::{NetworkEvent, P2PConfig, P2PNode, GOREV_TOPIC};
 use rand::Rng;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
 use tokio::signal;
@@ -41,6 +41,18 @@ const ARA_VARSAYILAN_K: usize = 5;
 const ARA_ENBUYUK_K: usize = 20;
 const ARA_BOYUT: usize = 768;
 const HAVUZ_YENILE_SN: u64 = 120;
+// --- C7 onarım/çoğaltma sabitleri ---
+const PARCA_BOYUT: u64 = 64 * 1024 * 1024; // 64 MiB parça
+const REPLIKA_HEDEF: i64 = 3; // parça başına canlı kopya hedefi
+const YEDEKLE_BATCH: i64 = 3; // görev başına en fazla parça
+const ONARIM_ODUL_MIKRO: i64 = 100; // parça başına hedef ücreti
+const OLU_ESIK_SN: i64 = 300; // nabız bu süredir yoksa ölü
+// --- C8 yoklama sabitleri ---
+const YOKLAMA_SURE_SN: i64 = 1800; // cevap penceresi (30 dk)
+const YOKLAMA_ARALIK_SN: u64 = 300; // uretim dongusu (5 dk)
+const YOKLAMA_BOYUT: u64 = 1024 * 1024; // orneklem 1 MiB
+const YOKLAMA_ACIK_LIMIT: i64 = 2; // miner basina acik ust sinir
+const YOKLAMA_TUR_LIMIT: i64 = 3; // dongu basina uretim ust sinir
 
 /// RAM'deki vektor havuzu: normalize edilmis duz dizi (n x 768).
 #[derive(Default)]
@@ -62,6 +74,14 @@ struct AppState {
     corpus: String,
     embed_api: String,
     embed_model: String,
+    /// Parça relay dizini (tohum parçalar + C7b'ye kadar transfer aktarması).
+    relay_dir: String,
+    /// Yedek dizini (tohum kaynağı; dışına çıkılmaz).
+    yedek_dir: String,
+    /// P2P gorev duyuru kuyrugu (None = yayin kapali). gorev_kaydet basarili
+    /// dagitimi buraya atar, shard-abone gorevi mesh'e yayinlar (R4/P2P).
+    /// HTTP dagitim yolu bundan etkilenmez (hata yoksayilir).
+    gorev_yayin_tx: Option<tokio::sync::mpsc::UnboundedSender<Vec<u8>>>,
 }
 
 #[derive(Deserialize)]
@@ -107,6 +127,9 @@ struct GorevPayload {
     // tip="denetim" ise doldurulur; embed gorevlerde None (JSON'a yazilmaz).
     #[serde(skip_serializing_if = "Option::is_none")]
     denetim: Option<Vec<DenetimRef>>,
+    // tip="yedekle" ise doldurulur.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    yedek: Option<Vec<YedekParca>>,
 }
 
 #[derive(Deserialize)]
@@ -282,6 +305,13 @@ fn current_batch_reward_micro(tamamlanan_batch: i64) -> i64 {
         return 0;
     }
     BATCH_ODUL_TABAN_MIKRO >> halvings
+}
+
+/// Guvenlik Md.1: corpus adi tele cikmaz; 8-hex kod gonderilir.
+/// Cozum sozlugu yalnizca komuta icindedir (miner icin opak etiket).
+fn corpus_kodu(corpus: &str) -> String {
+    let h = blake3::hash(corpus.as_bytes());
+    hex::encode(&h.as_bytes()[..4])
 }
 
 /// Deterministik spot-check: ayni (gorev, madde) hep ayni karari verir.
@@ -633,9 +663,25 @@ async fn register(
     Ok(Json(RegisterResp { token, miner_id }))
 }
 
+/// Heartbeat govdesi (tamami opsiyonel — eski istemciler bos gonderir).
+/// parcalar: miner'in tuttugu parca hash'leri + boyutlari.
+/// depolama_kota: taahhut edilen kota (bayt), varsa guncellenir.
+#[derive(Debug, Deserialize)]
+struct HeartbeatParca {
+    parca_hash: String,
+    boyut: i64,
+}
+
+#[derive(Debug, Deserialize)]
+struct HeartbeatReq {
+    parcalar: Option<Vec<HeartbeatParca>>,
+    depolama_kota: Option<i64>,
+}
+
 async fn heartbeat(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
+    body: Option<Json<HeartbeatReq>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let miner_id = token_dogrula(&headers, &state.pool).await?;
     let now = current_epoch();
@@ -645,7 +691,83 @@ async fn heartbeat(
         .execute(&state.pool)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    Ok(Json(serde_json::json!({"ok": true, "ts": Utc::now().format("%m-%d %H:%M:%S").to_string()})))
+
+    let mut bildirilen: usize = 0;
+    if let Some(Json(req)) = body {
+        // Kota beyanı (taahhut dosyasındaki değer; C5'teki sütuna işlenir).
+        if let Some(kota) = req.depolama_kota {
+            if kota >= 0 {
+                sqlx::query("UPDATE miners SET depolama_kota = ? WHERE miner_id = ?")
+                    .bind(kota)
+                    .bind(&miner_id)
+                    .execute(&state.pool)
+                    .await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            }
+        }
+        // Parça canlılık raporu: yer bilgisini tazele (ölüm ilanı C7'de okur).
+        if let Some(parcalar) = req.parcalar {
+            for p in parcalar.iter().take(4096) {
+                if p.parca_hash.len() != 64 || p.boyut <= 0 {
+                    continue;
+                }
+                sqlx::query(
+                    "INSERT INTO parcalar (parca_hash, boyut, ts) VALUES (?, ?, ?) ON CONFLICT(parca_hash) DO NOTHING"
+                )
+                .bind(&p.parca_hash)
+                .bind(p.boyut)
+                .bind(now)
+                .execute(&state.pool)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                sqlx::query(
+                    "INSERT INTO parca_yerleri (parca_hash, miner_id, ts) VALUES (?, ?, ?) ON CONFLICT(parca_hash, miner_id) DO UPDATE SET ts = excluded.ts"
+                )
+                .bind(&p.parca_hash)
+                .bind(&miner_id)
+                .bind(now)
+                .execute(&state.pool)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                bildirilen += 1;
+                // Açık onarım kapanışı + hedef ücreti (C7).
+                let kapanan = sqlx::query(
+                    "UPDATE onarimlar SET durum = 'tamam' WHERE parca_hash = ? AND hedef_miner = ? AND durum = 'acik'"
+                )
+                .bind(&p.parca_hash)
+                .bind(&miner_id)
+                .execute(&state.pool)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+                .rows_affected();
+                if kapanan > 0 {
+                    sqlx::query("UPDATE miners SET coin_mikro = coin_mikro + ? WHERE miner_id = ?")
+                        .bind(ONARIM_ODUL_MIKRO * kapanan as i64)
+                        .bind(&miner_id)
+                        .execute(&state.pool)
+                        .await
+                        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                    sqlx::query(
+                        "INSERT INTO ledger (miner_id, delta_mikro, neden, epoch, ts) VALUES (?, ?, 'onarim', ?, ?)"
+                    )
+                    .bind(&miner_id)
+                    .bind(ONARIM_ODUL_MIKRO * kapanan as i64)
+                    .bind(now)
+                    .bind(now)
+                    .execute(&state.pool)
+                    .await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                    info!("onarim kapandi: {} parca -> {} (+{} mikro)", p.parca_hash.chars().take(12).collect::<String>(), miner_id, ONARIM_ODUL_MIKRO * kapanan as i64);
+                }
+            }
+        }
+    }
+
+    Ok(Json(serde_json::json!({
+        "ok": true,
+        "ts": Utc::now().format("%m-%d %H:%M:%S").to_string(),
+        "parca_bildirilen": bildirilen,
+    })))
 }
 
 async fn gorev(
@@ -653,6 +775,15 @@ async fn gorev(
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
     let miner_id = token_dogrula(&headers, &state.pool).await?;
+
+    // Kara liste (Guvenlik Md.4): imha edilen gorev de alamaz, kanit da veremez.
+    let kara: Option<String> = sqlx::query_scalar("SELECT neden FROM kara_liste WHERE miner_id = ?")
+        .bind(&miner_id).fetch_optional(&state.pool).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    if let Some(neden) = kara {
+        warn!("Kara listedeki miner gorev istedi: {} ({})", miner_id, neden);
+        return Err((StatusCode::FORBIDDEN, "kara liste (operator affeti gerekli)".to_string()));
+    }
 
     // 3 strike yiyenin gorev akisi kesilir (affet komutuyla acilir).
     let strike: i64 = sqlx::query_scalar("SELECT strike FROM miners WHERE miner_id = ?")
@@ -674,6 +805,38 @@ async fn gorev(
 
     // Kritik bolum: cursor oku -> dagit -> cursor yaz tek sira.
     let _kilit = state.dagitim_kilidi.lock().await;
+    let now_ts0b = current_epoch();
+
+    // Onarım önceliği: kotası olan miner'a eksik kopyalı parçaları ver (C7).
+    // gorevler tablosuna 'yedekle' durumuyla işlenir (batch sayacını kirletmez).
+    {
+        let plan = onarim_planla(&state, &miner_id, now_ts0b).await?;
+        if !plan.is_empty() {
+            let gid = format!("yedekle:{}:{}", now_ts0b, &Uuid::new_v4().simple().to_string()[..12]);
+            let yedek: Vec<YedekParca> = plan.iter().map(|(h, b, oid)| YedekParca {
+                parca_hash: h.clone(), boyut: *b, onarim_id: *oid,
+            }).collect();
+            let n = yedek.len() as i64;
+            sqlx::query(
+                "INSERT OR IGNORE INTO gorevler (gorev_id, dagitilan_miner, corpus, offset, beklenen, alinan, durum, odul_mikro, ts) VALUES (?, ?, ?, 0, ?, 0, 'yedekle', 0, ?)"
+            )
+            .bind(&gid).bind(&miner_id).bind(&state.corpus).bind(n).bind(now_ts0b)
+            .execute(&state.pool)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            info!("Yedek gorevi: {} ({} parca) -> {}", gid, n, miner_id);
+            return Ok(Json(GorevResp {
+                id: gid,
+                tip: "yedekle".to_string(),
+                corpus: state.corpus.clone(),
+                shard: 0,
+                offset: 0,
+                limit: n,
+                deadline: now_ts0b + TASK_DEADLINE_SEC,
+                payload: GorevPayload { metinler: Vec::new(), madde_idler: Vec::new(), denetim: None, yedek: Some(yedek) },
+            }).into_response());
+        }
+    }
 
     let row = sqlx::query("SELECT son_id FROM gorev_cursor WHERE corpus = ?")
         .bind(&state.corpus)
@@ -776,9 +939,33 @@ async fn gorev_kaydet(
     madde_idler: Vec<i64>,
     etiket: &str,
 ) -> Result<GorevResp, (StatusCode, String)> {
-    let n = madde_idler.len();
-    let gid = format!("{}:{}:{}:{}", state.corpus, offset, n, Uuid::new_v4().simple());
+    let mut metinler = metinler;
+    let mut madde_idler = madde_idler;
+    let n0 = madde_idler.len();
+    let gid = format!("{}:{}:{}:{}", state.corpus, offset, n0, Uuid::new_v4().simple());
     let now_ts = current_epoch();
+    // KANARYA (Guvenlik Md.3): %4 olasilikla sentetik filigranli cumle serpistir.
+    // madde_id = -kanarya_id (negatif = sentetik isaret, gercek id ile cakismaz).
+    // Dagitim kanarya_dagitim'a yazilir; disarida gorulurse kaynak bellidir.
+    {
+        let roll: f64 = rand::thread_rng().gen_range(0.0..1.0);
+        if roll < 0.04 {
+            if let Ok(krow) = sqlx::query("SELECT id, metin FROM kanaryalar WHERE aktif = 1 ORDER BY RANDOM() LIMIT 1")
+                .fetch_optional(&state.pool).await
+            {
+                if let Some(k) = krow {
+                    let kid: i64 = k.get("id");
+                    let kmetin: String = k.get("metin");
+                    metinler.push(kmetin);
+                    madde_idler.push(-kid);
+                    let _ = sqlx::query("INSERT INTO kanarya_dagitim (kanarya_id, gorev_id, miner_id, ts) VALUES (?, ?, ?, ?)")
+                        .bind(kid).bind(&gid).bind(miner_id).bind(now_ts)
+                        .execute(&state.pool).await;
+                }
+            }
+        }
+    }
+    let n = madde_idler.len();
     // Dagitim izi: supurme, taze dagitilmis id'lere dokunmaz (TOCTOU korumasi).
     for chunk in madde_idler.chunks(500) {
         let mut q = String::from("INSERT INTO dagitilan_madde (madde_id, ts) VALUES ");
@@ -804,16 +991,49 @@ async fn gorev_kaydet(
     .execute(&state.pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    // KOR ID (Guvenlik Md.1): miner'a gercek madde_id gitmez. Dagitim basina
+    // rastgele 63-bit kor ID uretilir, esleme DB'de tutulur, kanit/denetim
+    // donusunde cozulur. dagitilan_madde/supurme ic izlerde GERCEK id kalir.
+    // NOT: RNG gecici tutulur (await oncesi duser) ki future Send kalsin.
+    let mut kor_idler: Vec<i64> = Vec::with_capacity(n);
+    {
+        let mut q = String::from("INSERT OR IGNORE INTO kor_esleme (kor_id, madde_id, gorev_id, ts) VALUES ");
+        q.push_str(&madde_idler.iter().map(|_| "(?, ?, ?, ?)").collect::<Vec<_>>().join(","));
+        let mut qq = sqlx::query(&q);
+        for m in &madde_idler {
+            // Cakisma olursa (OR IGNORE) yeniden cek.
+            let kor: i64 = loop {
+                let k: i64 = rand::thread_rng().gen_range(1..i64::MAX);
+                let var: Option<i64> = sqlx::query_scalar("SELECT kor_id FROM kor_esleme WHERE kor_id = ?")
+                    .bind(k).fetch_optional(&state.pool).await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                if var.is_none() { break k; }
+            };
+            kor_idler.push(kor);
+            qq = qq.bind(kor).bind(m).bind(&gid).bind(now_ts);
+        }
+        qq.execute(&state.pool)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    }
     info!("Görev {}: {} ({} madde) -> {}", etiket, gid, n, miner_id);
+    // R4/P2P: hafif duyuru (gorev_id + corpus hash). Gercek yuk HTTP ile
+    // alinir, gossip'e hassas veri konmaz. Kuyruk dolu/kapaliysa atlanir.
+    if let Some(tx) = state.gorev_yayin_tx.as_ref() {
+        let duyuru = serde_json::json!({"gorev_id": gid, "corpus": corpus_kodu(&state.corpus), "ts": now_ts});
+        if let Ok(raw) = serde_json::to_vec(&duyuru) {
+            let _ = tx.send(raw);
+        }
+    }
     Ok(GorevResp {
         id: gid,
         tip: "embed".to_string(),
-        corpus: state.corpus.clone(),
+        corpus: corpus_kodu(&state.corpus),
         shard: 0,
         offset,
         limit: n as i64,
         deadline: current_epoch() + TASK_DEADLINE_SEC,
-        payload: GorevPayload { metinler, madde_idler, denetim: None },
+        payload: GorevPayload { metinler, madde_idler: kor_idler, denetim: None, yedek: None },
     })
 }
 
@@ -838,6 +1058,9 @@ async fn supurme_dene(
     if sup >= son_id {
         sup = 0; // yakaladi, yeni tur
     }
+    // Tarama penceresi sinirli: her supurme en fazla 5000 id tarar.
+    // Sinirsiz tarama buyuk DB'de dagitimi kilitler (2026-09-06 olayi).
+    let ust = (sup + 5000).min(son_id);
 
     // Eski izleri temizle (1 saatten yasli dagitimlar supurulebilir).
     let now0 = current_epoch();
@@ -861,7 +1084,7 @@ async fn supurme_dene(
         "SELECT w.id, w.ozet FROM wiki.madde w WHERE w.id > ? AND w.id <= ? AND length(w.ozet) > 20 AND NOT EXISTS (SELECT 1 FROM main.kanitlar k WHERE k.madde_id = w.id) AND NOT EXISTS (SELECT 1 FROM main.dagitilan_madde d WHERE d.madde_id = w.id AND d.ts > ?) ORDER BY w.id LIMIT ?"
     )
     .bind(sup)
-    .bind(son_id)
+    .bind(ust)
     .bind(now0 - 300)
     .bind(TASK_BATCH)
     .fetch_all(&mut *conn)
@@ -871,12 +1094,13 @@ async fn supurme_dene(
     let rows = sorgu.map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     if rows.is_empty() {
-        // Bosluk yok: sup'u cursor'a esitle, normal akisa don.
+        // Bu pencerede bosluk yok: sup'u pencere sonuna ilerlet, normal akisa don.
+        // Pencere cursor'a dayandiysa bir sonraki cagri yeni tur baslatir.
         sqlx::query(
             "INSERT INTO gorev_cursor (corpus, son_id) VALUES (?, ?) ON CONFLICT(corpus) DO UPDATE SET son_id = excluded.son_id"
         )
         .bind(&sup_key)
-        .bind(son_id)
+        .bind(ust)
         .execute(&state.pool)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -973,8 +1197,21 @@ async fn dagit_denetim(state: &Arc<AppState>, auditor: &str) -> Result<Option<Go
             None => continue, // madde silinmisse bu kaydi atla
         };
         metinler.push(ozet.chars().take(4500).collect());
-        madde_idler.push(mid);
-        refs.push(DenetimRef { gorev_id: gid.clone(), madde_id: mid });
+        // KOR ID (Guvenlik Md.1): denetciye de gercek id gitmez. Bu dagitim
+        // basina kor uret, eslemeyi did altina yaz.
+        let kor: i64 = loop {
+            let k: i64 = rand::thread_rng().gen_range(1..i64::MAX);
+            let var: Option<i64> = sqlx::query_scalar("SELECT kor_id FROM kor_esleme WHERE kor_id = ?")
+                .bind(k).fetch_optional(&state.pool).await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            if var.is_none() { break k; }
+        };
+        sqlx::query("INSERT OR IGNORE INTO kor_esleme (kor_id, madde_id, gorev_id, ts) VALUES (?, ?, ?, ?)")
+            .bind(kor).bind(mid).bind(&gid)
+            .bind(current_epoch()).execute(&state.pool).await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        madde_idler.push(kor);
+        refs.push(DenetimRef { gorev_id: gid.clone(), madde_id: kor });
         sqlx::query("UPDATE kanitlar SET denetim_sayisi = denetim_sayisi + 1 WHERE gorev_id = ? AND madde_id = ?")
             .bind(&gid)
             .bind(mid)
@@ -1005,12 +1242,12 @@ async fn dagit_denetim(state: &Arc<AppState>, auditor: &str) -> Result<Option<Go
     Ok(Some(GorevResp {
         id: did,
         tip: "denetim".to_string(),
-        corpus: ilk_corpus,
+        corpus: corpus_kodu(&ilk_corpus),
         shard: 0,
         offset: 0,
         limit: n,
         deadline: now + TASK_DEADLINE_SEC,
-        payload: GorevPayload { metinler, madde_idler, denetim: Some(refs) },
+        payload: GorevPayload { metinler, madde_idler, denetim: Some(refs), yedek: None },
     }))
 }
 
@@ -1021,14 +1258,35 @@ async fn kanit(
 ) -> Result<Json<KanitResp>, (StatusCode, String)> {
     let miner_id = token_dogrula(&headers, &state.pool).await?;
 
+    // Kara liste (Guvenlik Md.4): imha edilen kanit da veremez.
+    let kara: Option<String> = sqlx::query_scalar("SELECT neden FROM kara_liste WHERE miner_id = ?")
+        .bind(&miner_id).fetch_optional(&state.pool).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    if kara.is_some() {
+        return Err((StatusCode::FORBIDDEN, "kara liste (operator affeti gerekli)".to_string()));
+    }
+
     // Denetim gorevlerine kanit gonderilmez (onlar denetim/sonuc'a gider).
     if req.gorev_id.starts_with("denetim:") {
         return Err((StatusCode::BAD_REQUEST, "Denetim gorevlerine kanit gonderilmez".to_string()));
     }
 
+    // KOR ID cozumu (Guvenlik Md.1): miner kor ID gonderir, gercek ID
+    // eslemeden cozulur. Esleme yoksa dagitilmamis/harici ID'dir -> red.
+    // Asagidaki tum akis GERCEK id ile surer (kanitlar/supurme ic izler).
+    let madde_gercek: i64 = sqlx::query_scalar(
+        "SELECT madde_id FROM kor_esleme WHERE kor_id = ? AND gorev_id = ?"
+    )
+    .bind(req.madde_id)
+    .bind(&req.gorev_id)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    .ok_or((StatusCode::BAD_REQUEST, "Bilinmeyen kor ID (dagitilmamis gorev)".to_string()))?;
+
     let exists = sqlx::query("SELECT 1 FROM kanitlar WHERE gorev_id = ? AND madde_id = ?")
         .bind(&req.gorev_id)
-        .bind(req.madde_id)
+        .bind(madde_gercek)
         .fetch_optional(&state.pool)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -1056,14 +1314,15 @@ async fn kanit(
     }
 
     let now = current_epoch();
-    let spot = spot_check_gerekli(&req.gorev_id, req.madde_id);
+    let spot = spot_check_gerekli(&req.gorev_id, madde_gercek);
 
     // Kaniti kaydet (anlik odul 0; odul batch tamamlaninca dagitilir).
+    // Ic izlerde GERCEK id (supurme/denetim tutarliligi icin).
     sqlx::query(
         "INSERT INTO kanitlar (gorev_id, madde_id, miner_id, v_int8_b64, v_min, v_max, odul_mikro, spot_check, ts) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?)"
     )
     .bind(&req.gorev_id)
-    .bind(req.madde_id)
+    .bind(madde_gercek)
     .bind(&miner_id)
     .bind(&req.v_int8_b64)
     .bind(req.v_min)
@@ -1082,7 +1341,7 @@ async fn kanit(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     if spot {
-        info!("Spot-check bayragi: miner={} gorev={} madde={}", miner_id, req.gorev_id, req.madde_id);
+        info!("Spot-check bayragi: miner={} gorev={} kor={}", miner_id, req.gorev_id, req.madde_id);
     }
 
     // Batch tamamlandi mi? Bekleneni bul (yoksa gorev_id'den parse et).
@@ -1340,20 +1599,67 @@ async fn denetim_liste(
     Ok(Json(DenetimResp { kayitlar: rows, sayi, toplam_bekleyen }))
 }
 
-async fn denetim_sonuc(
+/// Guvenlik Md.3: supheli metin kanarya mi? Operator destekli sizinti taramasi.
+/// Token'li herkes sorabilir ama kimlik DÖNMEZ (dagitim gecmisi operatorde/DB'de).
+/// Kullanim: disarida gorulen metin buraya yapistirilir, eslesme + sayi doner.
+/// Eslesme + sayi >= 2 dagitim ve dis kaynak = imha delili (komut/imha ile).
+async fn kanarya_kontrol(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Query(q): Query<HashMap<String, String>>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let _miner_id = token_dogrula(&headers, &state.pool).await?;
+    let metin = q.get("metin").map(|s| s.trim().to_string()).unwrap_or_default();
+    if metin.len() < 20 {
+        return Err((StatusCode::BAD_REQUEST, "metin cok kisa (min 20)".to_string()));
+    }
+    let kid: Option<i64> = sqlx::query_scalar(
+        "SELECT id FROM kanaryalar WHERE aktif = 1 AND instr(?, metin) > 0"
+    )
+    .bind(&metin).fetch_optional(&state.pool).await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    // Ters yon de dene (supheli parca kanaryanin parcasiysa).
+    let kid = match kid {
+        Some(k) => Some(k),
+        None => sqlx::query_scalar(
+            "SELECT id FROM kanaryalar WHERE aktif = 1 AND instr(metin, ?) > 0"
+        )
+        .bind(&metin).fetch_optional(&state.pool).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,
+    };
+    let dagitim_sayisi: i64 = match kid {
+        Some(k) => sqlx::query_scalar("SELECT COUNT(*) FROM kanarya_dagitim WHERE kanarya_id = ?")
+            .bind(k).fetch_one(&state.pool).await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?,
+        None => 0,
+    };
+    Ok(Json(serde_json::json!({"eslesti": kid.is_some(), "dagitim_sayisi": dagitim_sayisi})))
+}
+
+async fn denetim_sonuc(    State(state): State<Arc<AppState>>,
     headers: HeaderMap,
     Json(req): Json<DenetimSonuc>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let denetci = token_dogrula(&headers, &state.pool).await?;
     let now = current_epoch();
 
+    // KOR ID cozumu (Guvenlik Md.1): denetci kor ID gonderir.
+    let madde_gercek: i64 = sqlx::query_scalar(
+        "SELECT madde_id FROM kor_esleme WHERE kor_id = ? AND gorev_id = ?"
+    )
+    .bind(req.madde_id)
+    .bind(&req.gorev_id)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    .ok_or((StatusCode::BAD_REQUEST, "Bilinmeyen kor ID (dagitilmamis denetim)".to_string()))?;
+
     // Orijinal kaniti bul (denetim bayrakli olmali).
     let orow = sqlx::query(
         "SELECT miner_id, v_int8_b64, v_min, v_max, dogrulama, ret FROM kanitlar WHERE gorev_id = ? AND madde_id = ?"
     )
     .bind(&req.gorev_id)
-    .bind(req.madde_id)
+    .bind(madde_gercek)
     .fetch_optional(&state.pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -1364,7 +1670,7 @@ async fn denetim_sonuc(
     let ret_onceki: i64 = orow.get("ret");
     let ureten: String = orow.get("miner_id");
     if ureten == denetci {
-        warn!("Oz-denetim (testnet toleransli): denetci={} kendi kanitini denetliyor gorev={} madde={}", denetci, req.gorev_id, req.madde_id);
+        warn!("Oz-denetim (testnet toleransli): denetci={} kendi kanitini denetliyor gorev={} kor={}", denetci, req.gorev_id, req.madde_id);
     }
 
     // Skor: taze vektor varsa sunucu hesaplar (guvenilmez istemciye birakilmaz).
@@ -1413,7 +1719,7 @@ async fn denetim_sonuc(
         )
         .bind(cos)
         .bind(&req.gorev_id)
-        .bind(req.madde_id)
+        .bind(madde_gercek)
         .execute(&state.pool)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -1428,9 +1734,9 @@ async fn denetim_sonuc(
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         if ret_onceki >= 1 {
-            info!("Suphe GIDERILDI: denetci={} gorev={} madde={} cos={:.4} (onceki ret sayisi={})", denetci, req.gorev_id, req.madde_id, cos, ret_onceki);
+            info!("Suphe GIDERILDI: denetci={} gorev={} kor={} cos={:.4} (onceki ret sayisi={})", denetci, req.gorev_id, req.madde_id, cos, ret_onceki);
         } else {
-            info!("Denetim gecti: denetci={} gorev={} madde={} cos={:.4}", denetci, req.gorev_id, req.madde_id, cos);
+            info!("Denetim gecti: denetci={} gorev={} kor={} cos={:.4}", denetci, req.gorev_id, req.madde_id, cos);
         }
         return Ok(Json(serde_json::json!({"ok": true, "gecerli": true, "dogrulama": cos, "supheli": false})));
     }
@@ -1443,7 +1749,7 @@ async fn denetim_sonuc(
         )
         .bind(cos)
         .bind(&req.gorev_id)
-        .bind(req.madde_id)
+        .bind(madde_gercek)
         .execute(&state.pool)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
@@ -1483,7 +1789,7 @@ async fn denetim_sonuc(
             .fetch_one(&state.pool)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-        warn!("SLASH: ureten={} gorev={} madde={} cos={:.4} kesinti={} strike={} (denetciler: onceki+{})", ureten, req.gorev_id, req.madde_id, cos, kesinti, strike, denetci);
+        warn!("SLASH: ureten={} gorev={} kor={} cos={:.4} kesinti={} strike={} (denetciler: onceki+{})", ureten, req.gorev_id, req.madde_id, cos, kesinti, strike, denetci);
         return Ok(Json(serde_json::json!({"ok": true, "gecerli": false, "dogrulama": cos, "supheli": false, "slash": kesinti, "strike": strike})));
     }
 
@@ -1493,11 +1799,11 @@ async fn denetim_sonuc(
     )
     .bind(&denetci)
     .bind(&req.gorev_id)
-    .bind(req.madde_id)
+    .bind(madde_gercek)
     .execute(&state.pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    warn!("SUPHELI (1. ret, slash yok): denetci={} ureten={} gorev={} madde={} cos={:.4} -> ikinci denetciye iade", denetci, ureten, req.gorev_id, req.madde_id, cos);
+    warn!("SUPHELI (1. ret, slash yok): denetci={} ureten={} gorev={} kor={} cos={:.4} -> ikinci denetciye iade", denetci, ureten, req.gorev_id, req.madde_id, cos);
     Ok(Json(serde_json::json!({"ok": true, "gecerli": false, "dogrulama": cos, "supheli": true})))
 }
 
@@ -1551,6 +1857,404 @@ async fn shard_liste(
     Ok(Json(ShardListeResp { kayitlar: rows, sayi }))
 }
 
+/// --- C7: onarım/çoğaltma ---
+/// Relay dosya yolu (64-hex ad zorunlu, dizin dışına çıkılmaz).
+fn relay_yolu(state: &Arc<AppState>, hash: &str) -> Option<std::path::PathBuf> {
+    if hash.len() != 64 || !hash.chars().all(|c| c.is_ascii_hexdigit()) {
+        return None;
+    }
+    Some(std::path::PathBuf::from(&state.relay_dir).join(hash))
+}
+
+#[derive(Serialize)]
+struct YedekParca {
+    parca_hash: String,
+    boyut: i64,
+    onarim_id: i64,
+}
+
+/// Kaynak dosyayı (SADECE yedek dizinindeki komuta-*.db) parçala,
+/// relay dizinine yaz, kataloğa işle. Dönen: (hash, boyut) listesi.
+async fn tohumla(state: &Arc<AppState>, dosya: &str) -> Result<Vec<(String, i64)>, String> {
+    use tokio::io::AsyncReadExt;
+    if !dosya.starts_with("komuta-") || !dosya.ends_with(".db") || dosya.contains('/') || dosya.contains("..") {
+        return Err("yalnizca yedek dizinindeki komuta-*.db tohumlanabilir".to_string());
+    }
+    let kaynak = std::path::PathBuf::from(&state.yedek_dir).join(dosya);
+    let meta = tokio::fs::metadata(&kaynak).await.map_err(|e| format!("kaynak okunamadi: {}", e))?;
+    if !meta.is_file() || meta.len() == 0 {
+        return Err("kaynak dosya gecersiz".to_string());
+    }
+    tokio::fs::create_dir_all(&state.relay_dir).await.map_err(|e| e.to_string())?;
+    let mut f = tokio::fs::File::open(&kaynak).await.map_err(|e| e.to_string())?;
+    let now = current_epoch();
+    let mut cikti = Vec::new();
+    let mut tampon = vec![0u8; 4 * 1024 * 1024];
+    let mut aktif: Option<(blake3::Hasher, tokio::fs::File, u64)> = None;
+    let mut parca_say = 0i64;
+    loop {
+        let n = f.read(&mut tampon).await.map_err(|e| e.to_string())?;
+        if n == 0 {
+            break;
+        }
+        let mut dilim = &tampon[..n];
+        while !dilim.is_empty() {
+            if aktif.is_none() {
+                let gecici = format!("{}/.yaziliyor-{}", state.relay_dir, parca_say);
+                let wf = tokio::fs::File::create(&gecici).await.map_err(|e| e.to_string())?;
+                aktif = Some((blake3::Hasher::new(), wf, 0));
+            }
+            let (h, wf, yazilan) = aktif.as_mut().unwrap();
+            let oda = (PARCA_BOYUT - *yazilan).min(dilim.len() as u64) as usize;
+            use tokio::io::AsyncWriteExt;
+            wf.write_all(&dilim[..oda]).await.map_err(|e| e.to_string())?;
+            h.update(&dilim[..oda]);
+            *yazilan += oda as u64;
+            dilim = &dilim[oda..];
+            if *yazilan >= PARCA_BOYUT {
+                let (h, mut wf, boyut) = aktif.take().unwrap();
+                wf.shutdown().await.map_err(|e| e.to_string())?;
+                let hash = h.finalize().to_hex().to_string();
+                let hedef = format!("{}/{}", state.relay_dir, hash);
+                tokio::fs::rename(format!("{}/.yaziliyor-{}", state.relay_dir, parca_say), &hedef)
+                    .await.map_err(|e| e.to_string())?;
+                sqlx::query("INSERT OR IGNORE INTO parcalar (parca_hash, boyut, ts) VALUES (?, ?, ?)")
+                    .bind(&hash).bind(boyut as i64).bind(now)
+                    .execute(&state.pool).await.map_err(|e| e.to_string())?;
+                cikti.push((hash, boyut as i64));
+                parca_say += 1;
+            }
+        }
+    }
+    if let Some((h, mut wf, boyut)) = aktif.take() {
+        if boyut > 0 {
+            use tokio::io::AsyncWriteExt;
+            wf.shutdown().await.map_err(|e| e.to_string())?;
+            let hash = h.finalize().to_hex().to_string();
+            let hedef = format!("{}/{}", state.relay_dir, hash);
+            tokio::fs::rename(format!("{}/.yaziliyor-{}", state.relay_dir, parca_say), &hedef)
+                .await.map_err(|e| e.to_string())?;
+            sqlx::query("INSERT OR IGNORE INTO parcalar (parca_hash, boyut, ts) VALUES (?, ?, ?)")
+                .bind(&hash).bind(boyut as i64).bind(now)
+                .execute(&state.pool).await.map_err(|e| e.to_string())?;
+            cikti.push((hash, boyut as i64));
+        }
+    }
+    info!("tohumlandi: {} ({} parca)", dosya, cikti.len());
+    Ok(cikti)
+}
+
+/// Onarım planla: canlı kopyası hedefin altındaki parçalardan hedefe atanmamışları seç.
+/// Kritik bölüm kilidi ÇAĞIRANDA tutulur (dagitim_kilidi) — burada kilitlenmez!
+async fn onarim_planla(
+    state: &Arc<AppState>,
+    hedef: &str,
+    now: i64,
+) -> Result<Vec<(String, i64, i64)>, (StatusCode, String)> {
+    // Kota yoksa onarım görevi de yok.
+    let kota: i64 = sqlx::query_scalar("SELECT COALESCE(depolama_kota, 0) FROM miners WHERE miner_id = ?")
+        .bind(hedef)
+        .fetch_one(&state.pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    if kota <= 0 {
+        return Ok(Vec::new());
+    }
+    let satirlar = sqlx::query(
+        "SELECT p.parca_hash, p.boyut, COUNT(DISTINCT CASE WHEN m.last_seen > ? THEN y.miner_id END) AS canli
+         FROM parcalar p
+         LEFT JOIN parca_yerleri y ON y.parca_hash = p.parca_hash
+         LEFT JOIN miners m ON m.miner_id = y.miner_id
+         WHERE NOT EXISTS (SELECT 1 FROM parca_yerleri h WHERE h.parca_hash = p.parca_hash AND h.miner_id = ?)
+           AND NOT EXISTS (SELECT 1 FROM onarimlar o WHERE o.parca_hash = p.parca_hash AND o.hedef_miner = ? AND o.durum = 'acik')
+         GROUP BY p.parca_hash HAVING canli < ?
+         ORDER BY canli ASC, p.parca_hash ASC LIMIT ?"
+    )
+    .bind(now - OLU_ESIK_SN)
+    .bind(hedef)
+    .bind(hedef)
+    .bind(REPLIKA_HEDEF)
+    .bind(YEDEKLE_BATCH)
+    .fetch_all(&state.pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let mut cikti = Vec::new();
+    for r in satirlar {
+        let h: String = r.get("parca_hash");
+        let b: i64 = r.get("boyut");
+        let res = sqlx::query("INSERT INTO onarimlar (parca_hash, hedef_miner, durum, ts) VALUES (?, ?, 'acik', ?)")
+            .bind(&h).bind(hedef).bind(now)
+            .execute(&state.pool)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        cikti.push((h, b, res.last_insert_rowid()));
+    }
+    if !cikti.is_empty() {
+        info!("onarim planlandi: {} parca -> {} ", cikti.len(), hedef);
+    }
+    Ok(cikti)
+}
+
+/// POST /api/parca/tohum {"dosya": "komuta-2026-09-06-0018.db"}
+async fn parca_tohum(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(req): Json<serde_json::Value>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let miner_id = token_dogrula(&headers, &state.pool).await?;
+    let dosya = req.get("dosya").and_then(|v| v.as_str()).ok_or((StatusCode::BAD_REQUEST, "dosya gerekli".to_string()))?;
+    match tohumla(&state, dosya).await {
+        Ok(parcalar) => {
+            info!("tohum istendi: {} <- {} ({} parca)", dosya, miner_id, parcalar.len());
+            let liste: Vec<serde_json::Value> = parcalar
+                .iter()
+                .map(|(h, b)| serde_json::json!({"parca_hash": h, "boyut": b}))
+                .collect();
+            let n = liste.len();
+            Ok(Json(serde_json::json!({"ok": true, "parca_sayisi": n, "parcalar": liste})))
+        }
+        Err(m) => Err((StatusCode::BAD_REQUEST, m)),
+    }
+}
+
+/// GET /api/parca/indir/:hash — relay dosyasını akıtır.
+async fn parca_indir(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    axum::extract::Path(hash): axum::extract::Path<String>,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let _ = token_dogrula(&headers, &state.pool).await?;
+    let yol = relay_yolu(&state, hash.trim()).ok_or((StatusCode::BAD_REQUEST, "gecersiz hash".to_string()))?;
+    let veri = tokio::fs::read(&yol).await.map_err(|_| (StatusCode::NOT_FOUND, "parca relay'de yok".to_string()))?;
+    use axum::response::Response;
+    Ok(Response::builder()
+        .header("content-type", "application/octet-stream")
+        .header("content-length", veri.len().to_string())
+        .body(axum::body::Body::from(veri))
+        .map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "yanit kurulamadi".to_string()))?)
+}
+
+/// --- C8: rastgele parca yoklamasi (proof-of-storage-lite) ---
+/// Aday sec (kotasi olan, acik yoklamasi az olan tutucu) -> relay dosyasindan
+/// rastgele 1 MiB ornekle -> hash'le -> yoklamalar'a yaz. Donen: yoklama id.
+async fn yoklama_uret_bir(pool: &SqlitePool, relay_dir: &str, miner_filtre: Option<&str>) -> Result<Option<i64>, String> {
+    let aday = if let Some(m) = miner_filtre {
+        sqlx::query(
+            "SELECT y.miner_id, y.parca_hash FROM parca_yerleri y JOIN miners m ON m.miner_id = y.miner_id
+             WHERE y.miner_id = ? AND COALESCE(m.depolama_kota, 0) > 0
+               AND (SELECT COUNT(*) FROM yoklamalar o WHERE o.miner_id = y.miner_id AND o.durum = 'acik') < ?
+             ORDER BY RANDOM() LIMIT 1"
+        )
+        .bind(m)
+        .bind(YOKLAMA_ACIK_LIMIT)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| e.to_string())?
+    } else {
+        sqlx::query(
+            "SELECT y.miner_id, y.parca_hash FROM parca_yerleri y JOIN miners m ON m.miner_id = y.miner_id
+             WHERE COALESCE(m.depolama_kota, 0) > 0
+               AND (SELECT COUNT(*) FROM yoklamalar o WHERE o.miner_id = y.miner_id AND o.durum = 'acik') < ?
+             ORDER BY RANDOM() LIMIT 1"
+        )
+        .bind(YOKLAMA_ACIK_LIMIT)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| e.to_string())?
+    };
+    let (mid, hash): (String, String) = match aday {
+        Some(r) => (r.get("miner_id"), r.get("parca_hash")),
+        None => return Ok(None),
+    };
+    if hash.len() != 64 || !hash.chars().all(|c| c.is_ascii_hexdigit()) {
+        return Err("katalogda bozuk hash".to_string());
+    }
+    let veri = tokio::fs::read(format!("{}/{}", relay_dir.trim_end_matches('/'), hash))
+        .await
+        .map_err(|_| "parca relay'de yok (tohum kayip?)".to_string())?;
+    if veri.is_empty() {
+        return Err("relay dosyasi bos".to_string());
+    }
+    let ornek = YOKLAMA_BOYUT.min(veri.len() as u64) as usize;
+    let basla = if veri.len() > ornek {
+        rand::thread_rng().gen_range(0..=(veri.len() - ornek))
+    } else {
+        0
+    };
+    let beklenen = blake3::hash(&veri[basla..basla + ornek]).to_hex().to_string();
+    let now = current_epoch();
+    let res = sqlx::query(
+        "INSERT INTO yoklamalar (miner_id, parca_hash, offset, uzunluk, beklenen_hash, durum, ts) VALUES (?, ?, ?, ?, ?, 'acik', ?)"
+    )
+    .bind(&mid)
+    .bind(&hash)
+    .bind(basla as i64)
+    .bind(ornek as i64)
+    .bind(&beklenen)
+    .bind(now)
+    .execute(pool)
+    .await
+    .map_err(|e| e.to_string())?;
+    info!("yoklama uretildi: {} <- {} (offset {}, {} bayt)", &hash[..12], mid, basla, ornek);
+    Ok(Some(res.last_insert_rowid()))
+}
+
+/// Son 2 sonucu pes pese fail olanin kotasini sifirla (dusurme).
+/// Donen: dusuruldu mu?
+async fn dusurme_kontrol(pool: &SqlitePool, miner_id: &str) -> Result<bool, String> {
+    let sonuclar: Vec<String> = sqlx::query_scalar(
+        "SELECT durum FROM yoklamalar WHERE miner_id = ? AND durum != 'acik' ORDER BY id DESC LIMIT 2"
+    )
+    .bind(miner_id)
+    .fetch_all(pool)
+    .await
+    .map_err(|e| e.to_string())?;
+    if sonuclar.len() == 2 && sonuclar.iter().all(|d| d == "kaldi" || d == "sure-doldu") {
+        sqlx::query("UPDATE miners SET depolama_kota = 0 WHERE miner_id = ?")
+            .bind(miner_id)
+            .execute(pool)
+            .await
+            .map_err(|e| e.to_string())?;
+        warn!("DUSURME: {} depolama katmanindan cikarildi (2 pes pese fail)", miner_id);
+        return Ok(true);
+    }
+    Ok(false)
+}
+
+#[derive(Serialize)]
+struct YoklamaKaydi {
+    id: i64,
+    parca_hash: String,
+    offset: i64,
+    uzunluk: i64,
+}
+
+/// GET /api/depolama/yoklama — cagiranin en eski acik yoklamasi (yoksa 204).
+async fn yoklama_al(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> Result<impl IntoResponse, (StatusCode, String)> {
+    let miner_id = token_dogrula(&headers, &state.pool).await?;
+    let now = current_epoch();
+    let row = sqlx::query(
+        "SELECT id, parca_hash, offset, uzunluk FROM yoklamalar WHERE miner_id = ? AND durum = 'acik' AND ts > ? ORDER BY ts ASC LIMIT 1"
+    )
+    .bind(&miner_id)
+    .bind(now - YOKLAMA_SURE_SN)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    match row {
+        None => Ok(StatusCode::NO_CONTENT.into_response()),
+        Some(r) => Ok(Json(YoklamaKaydi {
+            id: r.get("id"),
+            parca_hash: r.get("parca_hash"),
+            offset: r.get("offset"),
+            uzunluk: r.get("uzunluk"),
+        }).into_response()),
+    }
+}
+
+#[derive(Deserialize)]
+struct YoklamaSonuc {
+    id: i64,
+    hash: String,
+}
+
+/// POST /api/depolama/yoklama/sonuc {"id", "hash"} — karsilastir, kapat, gerekirse dusur.
+async fn yoklama_sonuc(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(req): Json<YoklamaSonuc>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let miner_id = token_dogrula(&headers, &state.pool).await?;
+    let row = sqlx::query(
+        "SELECT parca_hash, beklenen_hash FROM yoklamalar WHERE id = ? AND miner_id = ? AND durum = 'acik'"
+    )
+    .bind(req.id)
+    .bind(&miner_id)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let row = row.ok_or((StatusCode::NOT_FOUND, "acik yoklama bulunamadi".to_string()))?;
+    let beklenen: String = row.get("beklenen_hash");
+    let gecerli = req.hash.trim().eq_ignore_ascii_case(beklenen.trim());
+    let durum = if gecerli { "gecti" } else { "kaldi" };
+    sqlx::query("UPDATE yoklamalar SET durum = ? WHERE id = ?")
+        .bind(durum)
+        .bind(req.id)
+        .execute(&state.pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    if gecerli {
+        info!("yoklama gecti: {} #{} ", miner_id, req.id);
+        return Ok(Json(serde_json::json!({"ok": true, "gecerli": true})));
+    }
+    warn!("yoklama KALDI: {} #{} ", miner_id, req.id);
+    let dusuruldu = dusurme_kontrol(&state.pool, &miner_id)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e))?;
+    Ok(Json(serde_json::json!({"ok": true, "gecerli": false, "dusuruldu": dusuruldu})))
+}
+
+/// POST /api/depolama/yoklama/uret {"miner_id": "...", "parca_hash": "..."} (hepsi opsiyonel).
+/// Test/ops tetikleyici + hedefli yeniden denetim.
+async fn yoklama_uret_endpoint(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(req): Json<serde_json::Value>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let _ = token_dogrula(&headers, &state.pool).await?;
+    // Hedefli uretim: supheli parcayi ozellikle denetle.
+    if let Some(hedef_hash) = req.get("parca_hash").and_then(|v| v.as_str()) {
+        let h = hedef_hash.trim();
+        if h.len() != 64 || !h.chars().all(|c| c.is_ascii_hexdigit()) {
+            return Err((StatusCode::BAD_REQUEST, "gecersiz parca_hash".to_string()));
+        }
+        let tutucu: Option<String> = sqlx::query_scalar(
+            "SELECT y.miner_id FROM parca_yerleri y JOIN miners m ON m.miner_id = y.miner_id
+             WHERE y.parca_hash = ? AND COALESCE(m.depolama_kota, 0) > 0
+               AND (SELECT COUNT(*) FROM yoklamalar o WHERE o.miner_id = y.miner_id AND o.durum = 'acik') < ?
+             ORDER BY RANDOM() LIMIT 1"
+        )
+        .bind(h)
+        .bind(YOKLAMA_ACIK_LIMIT)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        let mid = tutucu.ok_or((StatusCode::NOT_FOUND, "parcayi tutan uygun miner yok".to_string()))?;
+        let veri = tokio::fs::read(format!("{}/{}", state.relay_dir.trim_end_matches('/'), h))
+            .await
+            .map_err(|_| (StatusCode::NOT_FOUND, "parca relay'de yok (tohum kayip?)".to_string()))?;
+        if veri.is_empty() {
+            return Err((StatusCode::BAD_REQUEST, "relay dosyasi bos".to_string()));
+        }
+        let ornek = YOKLAMA_BOYUT.min(veri.len() as u64) as usize;
+        let basla = if veri.len() > ornek {
+            rand::thread_rng().gen_range(0..=(veri.len() - ornek))
+        } else {
+            0
+        };
+        let beklenen = blake3::hash(&veri[basla..basla + ornek]).to_hex().to_string();
+        let now = current_epoch();
+        let res = sqlx::query(
+            "INSERT INTO yoklamalar (miner_id, parca_hash, offset, uzunluk, beklenen_hash, durum, ts) VALUES (?, ?, ?, ?, ?, 'acik', ?)"
+        )
+        .bind(&mid).bind(h).bind(basla as i64).bind(ornek as i64).bind(&beklenen).bind(now)
+        .execute(&state.pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        info!("hedefli yoklama: {} <- {} (offset {})", &h[..12], mid, basla);
+        return Ok(Json(serde_json::json!({"ok": true, "yoklama_id": res.last_insert_rowid()})));
+    }
+    let filtre = req.get("miner_id").and_then(|v| v.as_str());
+    match yoklama_uret_bir(&state.pool, &state.relay_dir, filtre).await {
+        Ok(Some(id)) => Ok(Json(serde_json::json!({"ok": true, "yoklama_id": id}))),
+        Ok(None) => Ok(Json(serde_json::json!({"ok": true, "yoklama_id": null, "not": "uygun aday yok"}))),
+        Err(m) => Err((StatusCode::BAD_REQUEST, m)),
+    }
+}
+
 async fn komut(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -1594,14 +2298,36 @@ async fn komut(
                 }
             }
             "affet" => {
-                // Operator affi: strike sifirla, itibari yuzle.
+                // Operator affi: strike sifirla, itibari yuzle, kara listeden cikar.
                 let mid = payload_json.get("miner_id").and_then(|v| v.as_str()).ok_or((StatusCode::BAD_REQUEST, "miner_id gerekli".to_string()))?;
                 sqlx::query("UPDATE miners SET strike = 0, itibar = 100 WHERE miner_id = ?")
                     .bind(mid)
                     .execute(&state.pool)
                     .await
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-                info!("AFFET komutu: {} strike sifirlandi, itibar 100", mid);
+                sqlx::query("DELETE FROM kara_liste WHERE miner_id = ?")
+                    .bind(mid)
+                    .execute(&state.pool)
+                    .await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                info!("AFFET komutu: {} strike sifirlandi, itibar 100, kara liste temiz", mid);
+            }
+            "imha" => {
+                // Guvenlik Md.4: kanitli hainlikte imha — ban + pay/coin sifirlama.
+                // Sadece master imzasiyla (bu handler'in giris kosulu). Fiş cekene degil.
+                let mid = payload_json.get("miner_id").and_then(|v| v.as_str()).ok_or((StatusCode::BAD_REQUEST, "miner_id gerekli".to_string()))?;
+                let neden = payload_json.get("neden").and_then(|v| v.as_str()).unwrap_or("kanitli sizinti");
+                sqlx::query("INSERT OR REPLACE INTO kara_liste (miner_id, neden, ts) VALUES (?, ?, ?)")
+                    .bind(mid).bind(neden).bind(current_epoch())
+                    .execute(&state.pool)
+                    .await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                sqlx::query("UPDATE miners SET strike = 3, itibar = 0, pay = 0, coin_mikro = 0 WHERE miner_id = ?")
+                    .bind(mid)
+                    .execute(&state.pool)
+                    .await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                warn!("IMHA komutu: {} banlandi, pay sifirlandi (neden: {})", mid, neden);
             }
             _ => {
                 info!("Bilinmeyen komut tipi: {}", tip);
@@ -1630,6 +2356,20 @@ async fn main() -> anyhow::Result<()> {
     let embed_api = std::env::var("EMBED_API").unwrap_or_else(|_| "http://127.0.0.1:1241".to_string());
     let embed_model = std::env::var("EMBED_MODEL")
         .unwrap_or_else(|_| "text-embedding-nomic-embed-text-v1.5".to_string());
+    // C7: relay dizini + yedek dizini (tohum kaynagi). Yedek dizini DB'nin
+    // yanindaki `yedek/` klasorudur; tohum baska yola cikamaz.
+    let relay_dir = std::env::var("PARCA_RELAY").unwrap_or_else(|_| {
+        std::path::PathBuf::from(&db_path)
+            .parent().map(|p| p.join("parca-relay"))
+            .unwrap_or_else(|| std::path::PathBuf::from("/tmp/parca-relay"))
+            .to_string_lossy().to_string()
+    });
+    let yedek_dir = std::env::var("PARCA_YEDEK").unwrap_or_else(|_| {
+        std::path::PathBuf::from(&db_path)
+            .parent().map(|p| p.join("yedek"))
+            .unwrap_or_else(|| std::path::PathBuf::from("/tmp"))
+            .to_string_lossy().to_string()
+    });
 
     let db_url = if db_path.starts_with('/') {
         format!("sqlite:{}", db_path)
@@ -1682,6 +2422,14 @@ async fn main() -> anyhow::Result<()> {
         });
     }
 
+    // R4/P2P gorev duyuru kanali: gorev_kaydet -> abone gorevi -> mesh.
+    let (gorev_yayin_tx, gorev_yayin_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
+    let gorev_yayin_acik = std::env::var("P2P_GOREV_YAYIN").unwrap_or_else(|_| "1".to_string()) != "0";
+    if !gorev_yayin_acik {
+        info!("P2P gorev yayini kapali (P2P_GOREV_YAYIN=0)");
+    }
+    let mut gorev_yayin_rx: Option<tokio::sync::mpsc::UnboundedReceiver<Vec<u8>>> =
+        if gorev_yayin_acik { Some(gorev_yayin_rx) } else { None };
     let state = Arc::new(AppState {
         pool,
         wiki,
@@ -1692,7 +2440,11 @@ async fn main() -> anyhow::Result<()> {
         corpus,
         embed_api,
         embed_model,
+        relay_dir: relay_dir.clone(),
+        yedek_dir: yedek_dir.clone(),
+        gorev_yayin_tx: if gorev_yayin_acik { Some(gorev_yayin_tx) } else { None },
     });
+    info!("Parca relay: {} | yedek: {}", relay_dir, yedek_dir);
 
     let app = Router::new()
         .route("/health", get(health))
@@ -1707,10 +2459,16 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/komut", post(komut))
         .route("/api/denetim", get(denetim_liste))
         .route("/api/denetim/sonuc", post(denetim_sonuc))
+        .route("/api/kanarya/kontrol", get(kanarya_kontrol))
         .route("/api/shard/ilan", post(shard_ilan))
         .route("/api/shard", get(shard_liste))
         .route("/api/ara", post(ara))
         .route("/api/ara", get(ara_get))
+        .route("/api/parca/tohum", post(parca_tohum))
+        .route("/api/parca/indir/:hash", get(parca_indir))
+        .route("/api/depolama/yoklama", get(yoklama_al))
+        .route("/api/depolama/yoklama/sonuc", post(yoklama_sonuc))
+        .route("/api/depolama/yoklama/uret", post(yoklama_uret_endpoint))
         .layer(CorsLayer::permissive())
         .layer(TraceLayer::new_for_http())
         .with_state(state.clone());
@@ -1719,6 +2477,7 @@ async fn main() -> anyhow::Result<()> {
     // HTTP API'dan bagimsiz gorevde kosar; duserse API etkilenmez.
     if shard_sub {
         let state2 = state.clone();
+        let mut yayin_rx = gorev_yayin_rx.take();
         tokio::spawn(async move {
             let mut node = match P2PNode::new(P2PConfig { port: p2p_port, enable_mdns: true }).await {
                 Ok(n) => n,
@@ -1738,6 +2497,16 @@ async fn main() -> anyhow::Result<()> {
                     tokio::time::sleep(Duration::from_secs(5)).await;
                     continue;
                 }
+                // R4/P2P: biriken gorev duyurularini mesh'e yayinla.
+                // Bos mesh / hatsiz publish zararsizdir (hata yoksayilir).
+                if let Some(rx) = yayin_rx.as_mut() {
+                    while let Ok(raw) = rx.try_recv() {
+                        match node.publish(GOREV_TOPIC, raw) {
+                            Ok(()) => info!("gorev duyurusu yayinlandi: {}", GOREV_TOPIC),
+                            Err(e) => warn!("gorev duyuru yayin hatasi: {}", e),
+                        }
+                    }
+                }
                 while let Ok(ev) = rx.try_recv() {
                     if let NetworkEvent::MessageReceived { from, topic, data } = ev {
                         if topic != nemes_core::shard::SHARD_TOPIC {
@@ -1756,6 +2525,46 @@ async fn main() -> anyhow::Result<()> {
         });
     } else {
         info!("shard abonesi kapali (P2P_SHARD_SUB=0) — ilanlar sadece HTTP ile");
+    }
+
+    // C8 yoklama dongusu: sure-dolmuslari kapat + dusurme kontrolu + yeni uret.
+    {
+        let pool_y = state.pool.clone();
+        let relay_y = state.relay_dir.clone();
+        tokio::spawn(async move {
+            loop {
+                tokio::time::sleep(Duration::from_secs(YOKLAMA_ARALIK_SN)).await;
+                let now = current_epoch();
+                // 1. Suresi dolanlari kapat.
+                let dolan: Vec<(i64, String)> = sqlx::query_as::<_, (i64, String)>(
+                    "SELECT id, miner_id FROM yoklamalar WHERE durum = 'acik' AND ts < ?"
+                )
+                .bind(now - YOKLAMA_SURE_SN)
+                .fetch_all(&pool_y)
+                .await
+                .unwrap_or_default();
+                for (yid, mid) in dolan {
+                    let _ = sqlx::query("UPDATE yoklamalar SET durum = 'sure-doldu' WHERE id = ? AND durum = 'acik'")
+                        .bind(yid).execute(&pool_y).await;
+                    match dusurme_kontrol(&pool_y, &mid).await {
+                        Ok(true) => warn!("yoklama zaman asimi sonrasi DUSURME: {}", mid),
+                        Ok(false) => warn!("yoklama zaman asimi: {} #{} (ilk fail)", mid, yid),
+                        Err(e) => warn!("dusurme kontrol hatasi: {}", e),
+                    }
+                }
+                // 2. Yeni yoklamalar uret (tur limiti).
+                for _ in 0..YOKLAMA_TUR_LIMIT {
+                    match yoklama_uret_bir(&pool_y, &relay_y, None).await {
+                        Ok(Some(_)) => {}
+                        Ok(None) => break,
+                        Err(e) => {
+                            warn!("yoklama uretim hatasi: {}", e);
+                            break;
+                        }
+                    }
+                }
+            }
+        });
     }
 
     let addr = SocketAddr::from(([0, 0, 0, 0], port));

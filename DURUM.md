@@ -1,4 +1,4 @@
-# NEMES-X GÖREV DURUMU — 31 Ağu 19:50
+# NEMES-X GÖREV DURUMU — 08 Eyl 10:40 (senkron)
 > ANAYASA v3.0 (yerel /srv/beyin, 320 madde). GITHUB'DA YOK.
 
 ## TAMAMLANAN ✅ — GÜNCEL KRİTİK YOL
@@ -28,14 +28,21 @@
 - **Eski videolar**: Repo'dan kaldırıldı (3 dosya silindi)
 - **Eski tarifeler**: `$5/$15/$40` kaldırıldı → Free / Enterprise 2-kademe model
 
-## DEVAM EDEN (Arka Plan) — CANLI (01 Eyl 12:15)
+## DEVAM EDEN (Arka Plan) — CANLI (08 Eyl 00:05)
 - **#1 ULTRA 4K60**: DONE ✅ (31 Ağu 19:50)
-- **#2 newscrawl_tr**: 28G emb (12 shard) — dün 11G’ydi, +17G/15saat — 12 işçi aktif — ETA ~20 saat (02 Eyl sabah) — beyin_sirasi.py zincirinde
-- **#3 gut_en**: %85.9 (4.57M/5.33M) — PAUSED, newscrawl_tr bitince resume
-- **Disk**: 139G boş / 916G (%85) — 01 Eyl 11:50 — arşiv sonrası (enwiki 25G + trwiki 1G + buyuk_diller 41G → /beyin_arsiv) — wikidata 169G korundu
-- **Isı**: Tctl 61.4°C / NVMe 45.9°C — hedef 70-75 içinde, stabil
-- **Embed API**: 6× llama-server (1241-1246) — 107% (1242), diğerleri idle/0.2%
+- **Tam eğitim (adapter-v01)**: DONE ✅ 5900/5900 (loss 1.4835, acc 0.693) — 22:33 bitti — final test yapıldı: 10 soruda 4 iyi / 6 zayıf-tekrarlı (1.7B + LoRA için normal, RAG gerekli) — `yanit-final.json`
+- **wet_en rebuild**: BAŞARISIZ ❌ 08 Eyl 01:02 — 34.4M maddeye kadar geldi (8690/s), sonra `database or disk is full` — 111G txt → 226G DB'yi aştı, disk %100 oldu — yarım 226G DB silindi, disk 226G boşa döndü (%75) — karar bekliyor: atla / parçalı / şema düzelt
+- **#2 newscrawl_tr**: TAMAM ✅ (01 Eyl 17:09, 12 shard) — `sira_newscrawl_tr.done`
+- **#3 gut_en**: TAMAM ✅ (01 Eyl 23:12, 5.3M madde, 46G DB + ~3.9G emb) — `sira_gut_en.done`
+- **Takılanlar**: wet_en (DB malformed) / paracrawl (S3 404) — `eksik-kaynak`; caselaw HAZIR ✅ (Illinois vol 1 ALTO→JSONL: 450 görüş → 454 madde, wiki_caselaw.db 2.5MB; cc100 bitince done silinip tetiklenecek)
+- **Pipeline**: TAMAM ✅ (08 Eyl 10:50 ilk temiz tur) — yamalı kod + `beyin_sira.service` — enwt/wet_en/paracrawl/caselaw `eksik-kaynak` işaretli, diğerleri `tamam` — turlar artık anlık geçiyor, gerçek düzeltme gelince ilgili done silinip retry edilir
+- **Disk**: /srv/beyin 105G boş / 916G (%89) — 07 Eyl 15:47 — / 325G boş — 01 Eyl'deki 132G'den düştü, takipte
+- **Isı/Güç**: GPU 60°C, 150W limit, %100, VRAM 6.4/11G — CPU powersave 2.96GHz, Tctl ~58°C — stabil
+- **Embed API**: 6× llama-server (1241-1246) + bundle :1251 — idle, restart yok
+- **Testnet**: komuta-rs x2 + 2 miner canlı (bugün 01:42'den beri)
 - **Miner v0.2.0**: Tauri iskelet + Komuta API hazır (NemesXSpace/miner/, /srv/beyin/kaynaklar/komuta_api.py) — imzalı NSIS, HF 4 model, Ollama gibi pull
+- **P2P görev dağıtımı**: CANLI ✅ (08 Eyl ~11:00 deploy) — komuta+2 miner restart, hata yok — corpus tr tükenik (204) olduğu için ilk duyuru bir sonraki dağıtımda ateşlenecek
+- **S2/S3/S4**: KAPANDI ✅ (08 Eyl) — miner-api üyelikten çıkarıldı, komuta_api.py donduruldu, 6 iskelet `_arsiv/`'de, damıtma ertelendi (Qwen3-LoRA kilit) — `cargo check` temiz
 
 ## KALAN YAPILACAKLAR (P0/P1)
 1. **Manifesto çevirileri** (7 dil × ~13K kelime) — şu an EN fallback, 7 dil bekliyor
@@ -50,31 +57,40 @@
 - **Git push ağ sorunu** — GitHub'a push zaman aşımına uğruyor (ağ sorunu olabilir)
 - **Manifesto çevirileri** — 7 dil × 13K kelime (en büyük kalan iş)
 
-## SİSTEM DURUMU — 01 Eyl 12:15 CANLI
-- Disk: 139G boş / 916G (%85) — arşiv sonrası +58G net — / 383G boş — `beyin-sunucu.service` enabled, 6 llama sunucusu auto-start
-- Beyin: newscrawl_tr 28G emb (dün 11G), gut_en %85.9, wikidata 169G korundu — Tctl 61.4°C ideal
-- RAM: 30G total, 8.3G used, 21G available — yeterli (damıtma madencide, merkezde değil)
-- Bekçi: beyin_bekci 6 port, son restart 19:40, nemes-izle 60sn logluyor (NemesXSpace/izle.log)
-- Komuta API: /srv/beyin/kaynaklar/komuta_api.py (8787) — iskelet hazır, uvicorn ile test edilecek
+## SİSTEM DURUMU — 09 Eyl 17:05 CANLI
+- cc100_tr embed: 12 bağımsız işçi (6 API: 1241-1246) — TAM YÜK (temizlik sonrası): CPU 4.94GHz/performance (Tctl ~71°C stabil), GPU 250W %100/59°C, llama ctx8192/parallel4/threads4
+- FAISS: 23 index 3.4GB ✅ — cc100 bitince 24.
+- Testnet: komuta+2 miner canlı (P2P kodlu binary) — corpus tr tükenik (204)
+- Site: CANLI ✅ (09 Eyl) — 404 çözüldü (repo private→public + Pages açıldı), root/miner/faq 200
+- İzleme: `nemes-izleme` timer+servis sağlıklı (journal'da 15dk kontroller, 0 alarm) — eski `izle.log` emekli, artık journal'a bakılır
+- Pipeline: `beyin_sira` anlık TAMAM turlarında (günde ~4000 restart normal, hepsi skip) — `sira.log` 18M (çift satır: servis+script ikisi de yazıyor, düşük öncelikli temizlik)
+- Disk: /srv/beyin 186G boş (%79) — yedekler günlük 1.5GB sağlıklı
+- Eğitim: 4750/5900, loss 1.48, ETA ~8sa — bitince 10 soruluk test + final adapter
+- RAM: 30G total — yeterli (damıtma madencide, merkezde değil)
+- Bekçi: beyin_bekci 6 port, nemes-izle 60sn logluyor (NemesXSpace/izle.log — son satırlar 02 Eyl'de kalmış, izle timer durmuş olabilir, kontrol edilecek)
+- Komuta API: /srv/beyin/kaynaklar/komuta_api.py (8787) — iskelet hazır, uvicorn ile test edilecek (eğitim sonrası)
 - Miner: NemesXSpace/miner/ — Tauri + HF 4 model (Qwen3B/Gemma2B/Qwen7B/Qwen14B) — imzalı NSIS planlandı
 - GitHub push ağ sorunu: timeout (beklemede)
 
-## KRİTİK YOL — REVIZE (Merkez = Bilgi Merkezi, Madenciler Üretir)
+## KRİTİK YOL — REVİZE 07 Eyl (Merkez = Bilgi Merkezi, Madenciler Üretir)
 ```
 1. ULTRA DONE ✅ (31 Ağu 19:50)
    ↓
-2. newscrawl_tr 28G → ~50G — ETA 02 Eyl sabah (12 işçi) — ŞU AN ÇALIŞIYOR
+2. newscrawl_tr TAMAM ✅ + gut_en TAMAM ✅ (01 Eyl) — ŞU AN BİTTİ
    ↓
-3. gut_en resume → wet_en → paracrawl/caselaw — Beyin 109M → 40M vektör
+3. TAM EĞİTİM 4750/5900 → ~23:45 bitiyor — ŞU AN ÇALIŞIYOR, BEKLE
+   ↓ (eğitim bitince)
+4. wet_en/paracrawl/caselaw onarımı + enwt dump kararı — Beyin 109M → 40M vektör
    ↓
-4. FAISS PQ index (Madde 18) — madencinin RAG’i
+5. FAISS PQ index (Madde 18) — madencinin RAG'i
    ↓
-5. Miner v0.2 Windows (Tauri, imzalı, HF pull, Ollama gibi) — iskelet hazır
+6. Miner v0.2 Windows (Tauri, imzalı, HF pull, Ollama gibi) — iskelet hazır
    ↓
-6. Komuta API + Ödül Faz1/2 — pay→API, Enterprise H×%50
+7. Komuta API + Ödül Faz1/2 — pay→API, Enterprise H×%50
    ↓
-7. Debian/Ubuntu port — şirketler için
+8. Debian/Ubuntu port — şirketler için
 ```
 Damıtma merkezde değil, madencide — hazır 32B öğretmen, 1B/3B öğrenci QLoRA ile madenci GPU’sunda.
 
-**Sonraki adım**: `komuta_api`’yi uvicorn ile dry-run + miner `npm install` (Rust CI’da build) → website download güncelle
+## 1 YILLIK YOL HARİTASI (10 Eyl 2026)
+Tam metin: `docs/YOL-HARITASI-1YIL.md` — Faz 0 testnet kapanış (Eyl-Eki) → Faz 1 mainnet (Kas-Oca) → Faz 2 büyüme (Şub-May) → Faz 3 ölçek (Haz-Eyl 2027). Sıradaki kilit: tohum-0 (DNS+modem, sende) + cc100 embed bitişi.
