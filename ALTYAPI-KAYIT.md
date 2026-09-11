@@ -107,6 +107,12 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-11: **Embed yavaşlama teşhisi + çare** — llama.cpp 2.28.2 ~2 saatte 4x
+  (ölçüm 1241: 3435→764/dk; restart 4944/dk'a döndürüyor, tam cure). RSS sabit
+  (leak yok), hata yok, doküman/token boyu sabit → slot zamanlama patolojisi.
+  Çare: `embed_bekci.sh`'e dönüşümlü gençleştirme (sadece sağlıklıken, 90dk'dan
+  yaşlı tek sunucu, 30dk arayla) + `KillMode=process` drop-in (servis restart'i
+  cgroup katliamı yapmasın — 15:59'daki restart 6 sunucuyu SIGTERM'lemişti).
 - 2026-09-11: **Tavan kota ilkesi kilitlendi (garanti çekirdeği)** — docs/TOKENOMI.md
   §2b: günlük dağıtım ≤ HALVING_BATCH/1460 (era1 ~34,2M batch/gün), kota dolunca
   dağıtım durur + ertesi güne devreder, miner-başı tavan (sybil freni). En hızlı
