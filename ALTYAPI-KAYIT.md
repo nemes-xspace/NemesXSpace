@@ -113,6 +113,8 @@
   Çare: `embed_bekci.sh`'e dönüşümlü gençleştirme (sadece sağlıklıken, 90dk'dan
   yaşlı tek sunucu, 30dk arayla) + `KillMode=process` drop-in (servis restart'i
   cgroup katliamı yapmasın — 15:59'daki restart 6 sunucuyu SIGTERM'lemişti).
+  Üretimde kanıtlandı (taze 6960/dk vs bayat 680/dk, 10x). 20:36'dan itibaren
+  kapı 30dk→15dk (rotasyon 90dk, ETA ~1,5 gün).
 - 2026-09-11: **Tavan kota ilkesi kilitlendi (garanti çekirdeği)** — docs/TOKENOMI.md
   §2b: günlük dağıtım ≤ HALVING_BATCH/1460 (era1 ~34,2M batch/gün), kota dolunca
   dağıtım durur + ertesi güne devreder, miner-başı tavan (sybil freni). En hızlı
