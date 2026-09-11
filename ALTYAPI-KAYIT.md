@@ -117,6 +117,11 @@
   kapı 30dk→15dk (rotasyon 90dk, ETA ~1,5 gün). 12 Eyl 00:08: kapı 15dk→5dk
   (rotasyon 30dk, çürüme ilk 30dk'da olduğu için); ateşleme doğrulandı
   (1243, 5423sn, AYAKTA). Kapsam revizyonu: 108M madde, kalan ~102M → ETA ~4-5 gün.
+- 2026-09-12 02:49: **GPU tavan 250→300W + persistence mode** — gerekçe: taze
+  sunucularda GPU %97 pinleniyordu (250W binding). Sonuç: ısı sabit (52°C),
+  Xid/hata sıfır, Tctl 56°C. 375W'a çıkılmadı (VRM riski, azalan getiri —
+  Pascal verimlilik cliff'i). Not: hız A/B'si rolling çürümesiyle karışık
+  olduğu için izole edilemedi; zarar yok, tavan rahatladı.
 - 2026-09-11: **Tavan kota ilkesi kilitlendi (garanti çekirdeği)** — docs/TOKENOMI.md
   §2b: günlük dağıtım ≤ HALVING_BATCH/1460 (era1 ~34,2M batch/gün), kota dolunca
   dağıtım durur + ertesi güne devreder, miner-başı tavan (sybil freni). En hızlı
