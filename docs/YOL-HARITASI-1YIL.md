@@ -88,7 +88,7 @@
 
 | # | İş | Bitiş kriteri | Efor (adam-gün) | Bütçe (USD) | Sahip |
 |---|---|---|---|---|---|
-| 1.1 | Mainnet sabitleri commit'i | `BATCH_ODUL 80.000 mikro` + `HALVING_BATCH 500M` + tavan kontrolü, test ağında 1 hafta proofsuz hata yok | 4 | 0 | ben |
+| 1.1 | Mainnet sabitleri commit'i | `BATCH_ODUL 800 mikro` + `HALVING_BATCH 50B` (ETH-ölçeği 11 Eyl) + tavan kontrolü, test ağında 1 hafta proofsuz hata yok | 4 | 0 | ben |
 | 1.2 | Genesis töreni | Treasury 100M + ekip kilidi 20M + likidite 10M, 3 imzalı duyuru (site+repo+mail) | 3 | 0 | sen (tören) + ben (teknik) |
 | 1.3 | Natif Windows .exe | Standart imza (Let's Encrypt zinciri yeterli) + SmartScreen itibar birikimi + siteye ekleme | 10 | 0 | ben (CI kurulumu) |
 | 1.4 | HF model kartları + benchmark | adapter-v01 GGUF (Q4) + 10 soruluk skor + kart yayında | 5 | 0 | ben |

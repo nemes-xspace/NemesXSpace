@@ -19,29 +19,29 @@ yürürlükten kalkmıştır; faz mantığı korunmuştur).
 - 1 NEMES = 1.000.000 mikro (`COIN_UNIT`, kodda). Defter mikro ile tutulur.
 - Tavan kodlanır (arz endpoint'i tavanı reddeder); artırım = hard fork + duyuru.
 
-## 2. Emisyon (halving — Bitcoin modeli, KİLİTLİ 09 Eyl)
+## 2. Emisyon (halving — Bitcoin modeli, KİLİTLİ 09 Eyl + ETH-ölçeği 11 Eyl)
 
-- Batch = 20 doğrulanmış kanıt. Era = **500.000.000 batch** (`HALVING_BATCH`
+- Batch = 20 doğrulanmış kanıt. Era = **50.000.000.000 batch** (`HALVING_BATCH`
   mainnet değeri; kodtaki 5M testnet değeridir).
-- Era ödülü (batch başına): era1 **0,08 NEMES** (80.000 mikro) → era2 0,04 →
-  era3 0,02 → … (yarılanma).
-  - Era1 toplamı: 500M × 0,08 = 40M. Kuyruk toplamı ≈ 80M (tavan içi).
-  - Era süresi hedefi ~3 yıl (10 bin aktif madenci temposunda; Bitcoin'in
-    4 yıl ritmine denk).
+- Era ödülü (batch başına): era1 **0,0008 NEMES** (800 mikro) → era2 0,0004 →
+  era3 0,0002 → … (yarılanma).
+  - Era1 toplamı: 50B × 0,0008 = 40M. Kuyruk toplamı ≈ 80M (tavan içi).
+  - Era süresi hedefi ~2,7 yıl (1 milyon madenci × ~50 batch/gün = 50M batch/gün
+    temposunda; Bitcoin'in 4 yıl ritmine denk).
   - Kodtaki `BATCH_ODUL_TABAN_MIKRO = 2.000` **testnet değeridir**;
-    mainnet açılışında 80.000 mikro + `HALVING_BATCH` 500M olarak
+    mainnet açılışında 800 mikro + `HALVING_BATCH` 50B olarak
     güncellenecek (tek commit, ikisi birlikte).
-- **Kuyruk tabanı (Bitcoin kuralı):** era ödülü **0,0005 NEMES/batch altına inmez.**
+- **Kuyruk tabanı (Bitcoin kuralı):** era ödülü **0,000005 NEMES/batch altına inmez.**
   Bitcoin'de blok ödülü bitince madenci fee ile yaşar; bizde de kuyruk bitince
   madenci H havuzuyla (ücret piyasası) yaşar. Ödül asla sıfırlanmaz — tıpkı
   Bitcoin/Ethereum'da bitmediği gibi.
 - **Tavan koruması:** kuyruk + hazine + ekip + likidite toplamı 210M tavanı
   aşamaz; tavana 1M kala kuyruk orantısal kısılır (kod kuralı, mainnet'te).
   Pratikte tavana ulaşmak 40+ yıl sürer — o gün fee piyasası (H) ana gelir olur.
-- Era süresi batch ile tanımlıdır (zamana değil). Tahmini (10.000 aktif madenci
-  × ~50 batch/gün ≈ 500K batch/gün): era1 ≈ **5-10 yıl değil, ~10 gün** —
-  bu yüzden mainnet öncesi `HALVING_BATCH` **ağ büyüklüğüne göre revize edilir**
-  (öneri: 500M batch/era, ≈ 3 yıl). Revizyon mainnet lansman kararı ile kilitlenir.
+- Era süresi batch ile tanımlıdır (zamana değil). Kural: `HALVING_BATCH ≈
+  aktif madenci × 50 × 1000` (1000 günlük era hedefi). 1M madencide 50B ≈ 2,7 yıl;
+  ağ 100K'da kalırsa era ~27 yıla şişer, 10M'a koşarsa ~100 güne iner —
+  bu yüzden değer mainnet lansmanında gerçek sayıma göre kilitlenir.
 
 ## 3. Pay → Ödeme
 
@@ -96,3 +96,7 @@ yürürlükten kalkmıştır; faz mantığı korunmuştur).
 açılışında sabitler bu belgeye geçirilir (tek commit).*
 *Düzeltme 11 Eyl 2026: kuyruk tabanı 0,5 → 0,0005 (yazım hatasıydı; 0,5 başlangıç
 0,08'in üstünde olduğu için kural uygulanamazdı).*
+*Revizyon 11 Eyl 2026 (ETH-ölçeği): era 500M → 50B batch, era1 ödül 0,08 →
+0,0008 (800 mikro), taban 0,0005 → 0,000005. Gerekçe: ETH-2021 ölçeği (~1M
+madenci) baz alındı; era1 toplamı yine 40M, kuyruk yine ≈80M, taban-era yine
+250K — tüm tavan matematiği korundu, sadece süre 100 kat uzadı.*

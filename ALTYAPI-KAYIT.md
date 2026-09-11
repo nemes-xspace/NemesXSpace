@@ -85,9 +85,10 @@
    kalır (`BATCH_ODUL_TABAN_MIKRO=2000`, `HALVING_BATCH=5M`). API-hakkı
    alternatifi elendi. Ledger/bakiye/arz endpoint'leri coin defteri olarak
    devam. (`docs/TOKENOMI.md` Faz 1 = pay birikimi, Faz 2 = H = gelir×%50 nakit.)
-   Tokenomik KİLİTLİ (09 Eyl): tavan 210M, era1 0,08 NEMES/batch, Enterprise
-   fiyatları, Faz geçiş kriteri. Testnet `0.002` ile sürer; mainnet sabitleri
-   lansmanda geçirilir. Eski `odul-stratejisi.md` arşivde.
+   Tokenomik KİLİTLİ (09 Eyl) + ETH-ölçeği (11 Eyl): tavan 210M, era1 0,0008
+   NEMES/batch (800 mikro), `HALVING_BATCH` 50B. Enterprise
+   fiyatları, Faz geçiş kriteri. Testnet `0.002` + 5M ile sürer; mainnet sabitleri
+   (800 mikro + 50B) lansmanda tek commit'le geçirilir. Eski `odul-stratejisi.md` arşivde.
 2. **Tauri `miner/` + `miner-api` + Python `komuta_api.py` (KARAR VERİLDİ 08 Eyl — dondur):**
    Tek hat Rust CLI (`nemes-miner`). `miner-api` workspace members'dan çıkarıldı
    (klasör duruyor, derlenmiyor); `komuta_api.py` → `komuta_api.py.donduruldu`;
