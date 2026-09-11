@@ -38,6 +38,23 @@ yürürlükten kalkmıştır; faz mantığı korunmuştur).
 - **Tavan koruması:** kuyruk + hazine + ekip + likidite toplamı 210M tavanı
   aşamaz; tavana 1M kala kuyruk orantısal kısılır (kod kuralı, mainnet'te).
   Pratikte tavana ulaşmak 40+ yıl sürer — o gün fee piyasası (H) ana gelir olur.
+
+## 2b. Tavan kota (tempo regülatörü — GARANTİ ÇEKİRDEĞİ, KİLİTLİ 11 Eyl)
+
+Ölümcül risk erken tükenmedir (madenci akını erayı günlere indirir); geç tükenme
+zararsızdır. Bu yüzden kota **tavan** yönlüdür — frene basar, gaza basmaz:
+
+- **Kural:** günlük görev dağıtımı ≤ `HALVING_BATCH / 1460` (4 yıllık era varsayımı).
+  Era1: 50B / 1460 ≈ **34,2M batch/gün**. Kota dolunca dağıtım durur, kalan talep
+  ertesi güne devreder (miner `bekleniyor` — mekanizma hazır).
+- **Miner-başı günlük tavan:** kotanın adil bölüşümü, sybil/havuzlaşma freni
+  (detay formülü Faz B kodunda; ilke: tek adres kotayı domine edemez).
+- **Garanti:** en hızlı senaryoda bile era **≥4 yıl** → anlamlı mining **≥32 yıl**.
+  Talep düşükse era uzar (ödül/gün incelmez, kimse zarar görmez).
+- **Aktivasyon:** kod Faz B'de yazılır (tetikleyici: dağıtım kotanın %80'ine
+  **7 gün üst üste** değerse). İlke bugünden kilitli; erken dönemde fren yok.
+- **Sentetik dolgu (taban yönü) Faz C opsiyonudur:** talep kotanın altında
+  sürünürse tempo sentetik görevle doldurulur — gerekmedikçe yapılmaz.
 - Era süresi batch ile tanımlıdır (zamana değil). Kural: `HALVING_BATCH ≈
   aktif madenci × 50 × 1000` (1000 günlük era hedefi). 1M madencide 50B ≈ 2,7 yıl;
   ağ 100K'da kalırsa era ~27 yıla şişer, 10M'a koşarsa ~100 güne iner —
@@ -100,3 +117,5 @@ açılışında sabitler bu belgeye geçirilir (tek commit).*
 0,0008 (800 mikro), taban 0,0005 → 0,000005. Gerekçe: ETH-2021 ölçeği (~1M
 madenci) baz alındı; era1 toplamı yine 40M, kuyruk yine ≈80M, taban-era yine
 250K — tüm tavan matematiği korundu, sadece süre 100 kat uzadı.*
+*Garanti çekirdeği 11 Eyl 2026 (§2b tavan kota): günlük dağıtım ≤ HALVING_BATCH/1460;
+en hızlı senaryoda bile era ≥4 yıl (anlamlı mining ≥32 yıl). Kod Faz B'de.*

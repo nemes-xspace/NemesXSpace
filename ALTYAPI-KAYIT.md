@@ -107,6 +107,11 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-11: **Tavan kota ilkesi kilitlendi (garanti çekirdeği)** — docs/TOKENOMI.md
+  §2b: günlük dağıtım ≤ HALVING_BATCH/1460 (era1 ~34,2M batch/gün), kota dolunca
+  dağıtım durur + ertesi güne devreder, miner-başı tavan (sybil freni). En hızlı
+  senaryoda bile era ≥4 yıl → anlamlı mining ≥32 yıl. Kod Faz B'de (tetik: %80 ×
+  7 gün); erken dönemde fren yok.
 - 2026-09-09: **Güvenlik mimarisi kodlandı (deploy bekliyor)** — docs/GUVENLIK-MIMARISI.md +
   migration 011 (kor_esleme/kanaryalar/kanarya_dagitim/kara_liste, kopya DB'de
   test edildi) + kör ID (dagitim basina rastgele kor, kanit/denetim donusunde
