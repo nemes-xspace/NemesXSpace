@@ -31,7 +31,7 @@ yürürlükten kalkmıştır; faz mantığı korunmuştur).
   - Kodtaki `BATCH_ODUL_TABAN_MIKRO = 2.000` **testnet değeridir**;
     mainnet açılışında 80.000 mikro + `HALVING_BATCH` 500M olarak
     güncellenecek (tek commit, ikisi birlikte).
-- **Kuyruk tabanı (Bitcoin kuralı):** era ödülü **0,5 NEMES/batch altına inmez.**
+- **Kuyruk tabanı (Bitcoin kuralı):** era ödülü **0,0005 NEMES/batch altına inmez.**
   Bitcoin'de blok ödülü bitince madenci fee ile yaşar; bizde de kuyruk bitince
   madenci H havuzuyla (ücret piyasası) yaşar. Ödül asla sıfırlanmaz — tıpkı
   Bitcoin/Ethereum'da bitmediği gibi.
@@ -94,3 +94,5 @@ yürürlükten kalkmıştır; faz mantığı korunmuştur).
 ---
 *09 Eyl 2026 onayı ile kilitlendi. Testnet `0.002` ile devam eder; mainnet
 açılışında sabitler bu belgeye geçirilir (tek commit).*
+*Düzeltme 11 Eyl 2026: kuyruk tabanı 0,5 → 0,0005 (yazım hatasıydı; 0,5 başlangıç
+0,08'in üstünde olduğu için kural uygulanamazdı).*
