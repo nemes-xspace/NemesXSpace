@@ -117,6 +117,10 @@
   kapı 30dk→15dk (rotasyon 90dk, ETA ~1,5 gün). 12 Eyl 00:08: kapı 15dk→5dk
   (rotasyon 30dk, çürüme ilk 30dk'da olduğu için); ateşleme doğrulandı
   (1243, 5423sn, AYAKTA). Kapsam revizyonu: 108M madde, kalan ~102M → ETA ~4-5 gün.
+  DÜZELTME (12 Eyl 18:11 kontrolü): 5dk kapı rotasyonu kısaltmamış — yaş kapısı
+  (5400sn) bağlıyordu, merdiven 15dk'da kalmıştı. Gerçek düğme yaş kapısı:
+  5400→1800sn indirildi, rotasyon gerçekten ~30dk'ya indi (ateşler 5-6dk arayla,
+  yaşlar 4026sn'ye converging). ETA ~3,5-4 gün.
 - 2026-09-12 02:49: **GPU tavan 250→300W + persistence mode** — gerekçe: taze
   sunucularda GPU %97 pinleniyordu (250W binding). Sonuç: ısı sabit (52°C),
   Xid/hata sıfır, Tctl 56°C. 375W'a çıkılmadı (VRM riski, azalan getiri —
