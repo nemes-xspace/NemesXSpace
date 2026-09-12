@@ -122,6 +122,9 @@
   Xid/hata sıfır, Tctl 56°C. 375W'a çıkılmadı (VRM riski, azalan getiri —
   Pascal verimlilik cliff'i). Not: hız A/B'si rolling çürümesiyle karışık
   olduğu için izole edilemedi; zarar yok, tavan rahatladı.
+- 2026-09-12 03:05: **GPU tavan 300→250W GERİ ALINDI (operatör emri)** — kart elleme
+  yok; kullanım iş yüküyle yükseltilecek. Gözlem: kullanım %36-97 salınıyor
+  (ort ~%50-60); darboğaz kart değil sunucu hattı.
 - 2026-09-11: **Tavan kota ilkesi kilitlendi (garanti çekirdeği)** — docs/TOKENOMI.md
   §2b: günlük dağıtım ≤ HALVING_BATCH/1460 (era1 ~34,2M batch/gün), kota dolunca
   dağıtım durur + ertesi güne devreder, miner-başı tavan (sybil freni). En hızlı
