@@ -51,8 +51,9 @@
 | 0.11 | Testnet regresyon test paketi | CI'da 20+ senaryo, her commit'te yeşil (eklendi) | 4 | 0 | ben |
 | 0.12 | Telemetri/monitoring (dağıtık) | Düğüm sağlığı görünür, merkez yok, site 5 dk gecikmeli (eklendi) | 4 | 0 | ben |
 | 0.13 | Dokümantasyon sitesi (docs.*) | Operatör + madenci + güvenlik bölümleri yayında (eklendi) | 5 | 0 | ben |
+| 0.14 | GPU doygunluğu: 12 sunucu birebir (cc100 SONRASI, koşan işe ellemeden) | 1247-1252 canlı, 12 işçi→12 sunucu 1:1, bekçi PORTLAR+rolling, izleme uçları güncel, VRAM ~5/11GB, sürekli kullanım %80+ | 2 | 0 (mevcut donanım) | ben (cc100 bitiminde) |
 
-**Faz 0 toplam efor:** ~53 adam-gün · **Toplam nakit bütçe:** ~$30 (alan adı) — sıfır bütçe revizyonu (Eyl 2026)
+**Faz 0 toplam efor:** ~55 adam-gün · **Toplam nakit bütçe:** ~$30 (alan adı) — sıfır bütçe revizyonu (Eyl 2026)
 
 **Metrikler (Eki sonu):** düğüm ≥5 (≥3 bağımsız operatör), vektör 60M+, FAISS 24-25, site 8/8 güncel.
 **Çıkış kapısı:** 5 düğüm 7 gün kesintisiz + dışarıdan katılan 1 madenci ilk payını alırsa Faz 1'e geçilir.
