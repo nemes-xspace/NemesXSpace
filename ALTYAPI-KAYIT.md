@@ -110,6 +110,10 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-16: **Ölçek-1 deploy edildi.** Kilit metriği (500ms warn + 1000'de
+  ortalama) + WAL/NORMAL/30sn-timeout + stres tablosu (`docs/TOKENOMIK-STRES.md`).
+  Canlıda -wal/-shm doğrulandı, batch'ler kapanıyor. Komuta DB 2.6G (üretim
+  büyümesi normal). Test 11/11.
 - 2026-09-16: **Gece nöbeti (win madenci).** 30dk örneklemeli `nemes-merge/gece-gozlem.sh`
   (18 tur ≈ 9 saat): win pay/kanıt/spot/geçti/kaldı + toplam + escrow + llama +
   servis + hata + disk. Taban 23:19: win 6971 pay, ağ 1.55M kanıt, 49K emanet.
