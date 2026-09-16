@@ -109,18 +109,28 @@ impl EmbedClient {
         }
 
         let json: serde_json::Value = resp.json().await?;
-        let mut sonuclar = Vec::with_capacity(metinler.len());
-        for d in json["data"].as_array().unwrap_or(&vec![]) {
-            let idx = d["index"].as_u64().unwrap_or(0) as usize;
-            let embedding = d["embedding"].as_array()
-                .ok_or_else(|| anyhow::anyhow!("embedding array yok"))?
+        // BUG-1 duzeltmesi: siraya guvenme, `index` alanina yerlestir.
+        // Eksik/hatali index = veri hizalanma bozulmasi demek, sessizce gecme.
+        let mut sonuclar: Vec<Vec<f32>> = vec![Vec::new(); metinler.len()];
+        for d in json["data"].as_array().cloned().unwrap_or_default() {
+            let idx = d.get("index").and_then(|v| v.as_u64()).unwrap_or(usize::MAX as u64) as usize;
+            if idx >= sonuclar.len() {
+                return Err(anyhow::anyhow!("embedding index aralik disi: {} (beklenen < {})", idx, sonuclar.len()));
+            }
+            let embedding: Vec<f32> = d.get("embedding")
+                .and_then(|v| v.as_array())
+                .ok_or_else(|| anyhow::anyhow!("embedding array yok (index {})", idx))?
                 .iter()
                 .map(|v| v.as_f64().unwrap_or(0.0) as f32)
                 .collect();
-            sonuclar.push(embedding);
+            if embedding.is_empty() {
+                return Err(anyhow::anyhow!("bos embedding (index {})", idx));
+            }
+            sonuclar[idx] = embedding;
         }
-        // Sıralamayı koru
-        sonuclar.sort_by_key(|_| 0); // zaten sıralı gelir ama garantisi için
+        if sonuclar.iter().any(|v| v.is_empty()) {
+            return Err(anyhow::anyhow!("eksik embedding: {}/{} geldi", sonuclar.iter().filter(|v| !v.is_empty()).count(), sonuclar.len()));
+        }
         Ok(sonuclar)
     }
 }

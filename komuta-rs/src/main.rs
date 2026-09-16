@@ -26,7 +26,7 @@ const COIN_UNIT: i64 = 1_000_000;
 // Uretim: batch bazli odul. 20 kanit = 1 batch = 1 odul birimi.
 const BATCH_ODUL_TABAN_MIKRO: i64 = 2_000; // batch basina 0.002 NEMES (kademe 0)
 const HALVING_BATCH: i64 = 5_000_000; // her 5M tamamlanan batch'te odul yariya iner (=100M kanit)
-const SPOT_CHECK_YUZDE: u8 = 1; // kanitlarin %1'i rastgele denetime duser
+const SPOT_CHECK_YUZDE: u8 = 10; // kanitlarin %10'u rastgele denetime duser (site ile uyumlu; B-1)
 const DENETIM_BATCH: i64 = 5; // bir denetim gorevinde en fazla kac kayit
 const DENETIM_ODUL_MIKRO: i64 = 50; // denetim sonucu basina denetci ucreti (0.00005 NEMES)
 const DENETIM_ESIK: f32 = 0.98; // kosinus alti = kaldi
@@ -1412,27 +1412,47 @@ async fn kanit(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let batch_odul = current_batch_reward_micro(tamamlanan);
 
-    let katki: Vec<sqlx::sqlite::SqliteRow> = sqlx::query(
-        "SELECT miner_id, COUNT(*) as c FROM kanitlar WHERE gorev_id = ? GROUP BY miner_id ORDER BY c DESC"
+    // B-1: dagitimda KALAN (dogrulanmamis-basarisiz) kanitlar pay almaz;
+    // supheli (spot+denetimsiz) kanitlarin payi emanete (escrow) yazilir.
+    // Kapanis sayaci (sayi) aynen tum kanitlari sayar (liveness korunur).
+    let satirlar: Vec<sqlx::sqlite::SqliteRow> = sqlx::query(
+        "SELECT miner_id, madde_id, (spot_check = 1 AND dogrulama IS NULL) AS emanet FROM kanitlar WHERE gorev_id = ? AND (dogrulama IS NULL OR dogrulama >= ?) ORDER BY miner_id, madde_id"
     )
     .bind(&req.gorev_id)
+    .bind(DENETIM_ESIK)
     .fetch_all(&state.pool)
     .await
     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
 
     let mut dagitilan: i64 = 0;
     let mut benim_payim: i64 = 0;
-    let n_katki = katki.len() as i64;
-    for (i, r) in katki.iter().enumerate() {
+    let n_satir = satirlar.len() as i64;
+    for (i, r) in satirlar.iter().enumerate() {
         let mid: String = r.get("miner_id");
-        let c: i64 = r.get("c");
-        // Son katkiya kalan bakiyeyi ver (kusurat kaybi olmasin).
-        let pay_i = if i as i64 == n_katki - 1 {
+        let mid_kanit: i64 = r.get("madde_id");
+        let emanet: i64 = r.get("emanet");
+        // Son satira kalan bakiyeyi ver (kusurat kaybi olmasin).
+        let pay_i = if i as i64 == n_satir - 1 {
             batch_odul - dagitilan
         } else {
-            (batch_odul * c) / beklenen
+            batch_odul / beklenen
         };
-        if pay_i > 0 {
+        if pay_i <= 0 {
+            continue;
+        }
+        if emanet == 1 {
+            sqlx::query(
+                "INSERT OR IGNORE INTO escrow (gorev_id, madde_id, miner_id, miktar_mikro, ts) VALUES (?, ?, ?, ?, ?)"
+            )
+            .bind(&req.gorev_id)
+            .bind(mid_kanit)
+            .bind(&mid)
+            .bind(pay_i)
+            .bind(now)
+            .execute(&state.pool)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        } else {
             sqlx::query("UPDATE miners SET coin_mikro = coin_mikro + ? WHERE miner_id = ?")
                 .bind(pay_i)
                 .bind(&mid)
@@ -1451,8 +1471,8 @@ async fn kanit(
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         }
         dagitilan += pay_i;
-        if mid == miner_id {
-            benim_payim = pay_i;
+        if mid == miner_id && emanet == 0 {
+            benim_payim += pay_i;
         }
     }
 
@@ -1687,10 +1707,9 @@ async fn denetim_sonuc(    State(state): State<Arc<AppState>>,
             (c, c >= DENETIM_ESIK)
         }
         _ => {
-            // Legacy: istemci-hesapli skor.
-            let d = req.dogrulama.ok_or((StatusCode::BAD_REQUEST, "dogrulama veya taze vektor gerekli".to_string()))?;
-            let g = req.gecerli.unwrap_or(d >= DENETIM_ESIK);
-            (d, g)
+            // B-3: istemci-hesapli skor kabul edilmez (emeksiz denetim).
+            // Denetci taze vektor gondermek zorunda; kosinusu komuta hesaplar.
+            return Err((StatusCode::BAD_REQUEST, "taze denetim vektoru gerekli (v_int8_b64+v_min+v_max)".to_string()));
         }
     };
 
@@ -1725,6 +1744,42 @@ async fn denetim_sonuc(    State(state): State<Arc<AppState>>,
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         if r.rows_affected() == 0 {
             return Err((StatusCode::CONFLICT, "Bu kayit araya denetlenmis".to_string()));
+        }
+        // B-1: bu kanitin emanetteki payi varsa serbest birak (batch kapandiysa yazilmistir).
+        let emanetler: Vec<sqlx::sqlite::SqliteRow> = sqlx::query(
+            "SELECT miner_id, miktar_mikro FROM escrow WHERE gorev_id = ? AND madde_id = ?"
+        )
+        .bind(&req.gorev_id)
+        .bind(madde_gercek)
+        .fetch_all(&state.pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        for erow in emanetler {
+            let emid: String = erow.get("miner_id");
+            let emik: i64 = erow.get("miktar_mikro");
+            sqlx::query("UPDATE miners SET coin_mikro = coin_mikro + ? WHERE miner_id = ?")
+                .bind(emik)
+                .bind(&emid)
+                .execute(&state.pool)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            sqlx::query(
+                "INSERT INTO ledger (miner_id, delta_mikro, neden, epoch, ts) VALUES (?, ?, 'escrow', ?, ?)"
+            )
+            .bind(&emid)
+            .bind(emik)
+            .bind(now)
+            .bind(now)
+            .execute(&state.pool)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            sqlx::query("DELETE FROM escrow WHERE gorev_id = ? AND madde_id = ?")
+                .bind(&req.gorev_id)
+                .bind(madde_gercek)
+                .execute(&state.pool)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            info!("Escrow serbest: miner={} gorev={} madde={} miktar={}", emid, req.gorev_id, madde_gercek, emik);
         }
         sqlx::query("UPDATE miners SET itibar = CASE WHEN itibar + ? > 100 THEN 100 ELSE itibar + ? END WHERE miner_id = ?")
             .bind(ITIBAR_ODUL)
@@ -1781,6 +1836,13 @@ async fn denetim_sonuc(    State(state): State<Arc<AppState>>,
             .bind(ITIBAR_CEZA)
             .bind(ITIBAR_CEZA)
             .bind(&ureten)
+            .execute(&state.pool)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        // B-1: hile kesinlesen kanitin emanetteki payi yanar (odenmemisti, ledger'e dokunulmaz).
+        sqlx::query("DELETE FROM escrow WHERE gorev_id = ? AND madde_id = ?")
+            .bind(&req.gorev_id)
+            .bind(madde_gercek)
             .execute(&state.pool)
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
