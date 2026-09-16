@@ -57,14 +57,15 @@
 - **Git push ağ sorunu** — GitHub'a push zaman aşımına uğruyor (ağ sorunu olabilir)
 - **Manifesto çevirileri** — 7 dil × 13K kelime (en büyük kalan iş)
 
-## SİSTEM DURUMU — 09 Eyl 17:05 CANLI
-- cc100_tr embed: 12 bağımsız işçi (6 API: 1241-1246) — TAM YÜK (temizlik sonrası): CPU 4.94GHz/performance (Tctl ~71°C stabil), GPU 250W %100/59°C, llama ctx8192/parallel4/threads4
-- FAISS: 23 index 3.4GB ✅ — cc100 bitince 24.
+## SİSTEM DURUMU — 16 Eyl 11:15 CANLI (cc100 KAPANIŞ)
+- cc100_tr embed: TAMAM ✅ 109.271.443 vektör (%101.2, 7.635 atlanan) — 15 Eyl 12 işçi 0'la kapattı, merge 1.3sa + FAISS-24 66dk bitti (ntotal doğrulandı)
+- FAISS: 24 index ✅ (cc100: 4.1G faiss + 834M ids, nlist 1024) — önceki 23 toplam 3.4G
 - Testnet: komuta+2 miner canlı (P2P kodlu binary) — corpus tr tükenik (204)
 - Site: CANLI ✅ (09 Eyl) — 404 çözüldü (repo private→public + Pages açıldı), root/miner/faq 200
 - İzleme: `nemes-izleme` timer+servis sağlıklı (journal'da 15dk kontroller, 0 alarm) — eski `izle.log` emekli, artık journal'a bakılır
 - Pipeline: `beyin_sira` anlık TAMAM turlarında (günde ~4000 restart normal, hepsi skip) — `sira.log` 18M (çift satır: servis+script ikisi de yazıyor, düşük öncelikli temizlik)
-- Disk: /srv/beyin 186G boş (%79) — yedekler günlük 1.5GB sağlıklı
+- Disk: /srv/beyin ~104G boş (%89), / ~193G boş — merge dosyası /'de (118G), ana DB symlink; emb 12x7G + orig-bak 25G duruyor (arşiv kararı bekliyor)
+- Reboot: 16 Eyl ~11:12 (uptime taze) — llama 0/6 (görev yok, bekliyor), servisler 6/6 active, yedek 00:02 taze
 - Eğitim: 4750/5900, loss 1.48, ETA ~8sa — bitince 10 soruluk test + final adapter
 - RAM: 30G total — yeterli (damıtma madencide, merkezde değil)
 - Bekçi: beyin_bekci 6 port, nemes-izle 60sn logluyor (NemesXSpace/izle.log — son satırlar 02 Eyl'de kalmış, izle timer durmuş olabilir, kontrol edilecek)

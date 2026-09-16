@@ -107,6 +107,13 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-15/16: **cc100_tr KAPANIŞ — embed+merge+FAISS DONE.** 12 işçi 15 Eyl
+  0 yeniyle kapattı (w9 son 34.130). Toplam **109.271.443 vektör + 7.635 atlanan**
+  (%101.2). Merge `/` bölmesine kopya üstüne (25G→118G, 1.3sa, INSERT OR IGNORE,
+  GENEL TOPLAM birebir), canlı DB'ye yazılmadı; swap symlink ile (eski 25G
+  `.orig-bak`'ta, silinen yok). FAISS-24 66dk (3942s): 4.1G faiss + 834M ids,
+  ntotal=109271443 doğrulandı. Disk: /srv/beyin ~104G, / ~193G. Kalan: emb 12x7G
+  arşiv kararı + DURUM commit. 16 Eyl reboot (llama 0/6, görev yok).
 - 2026-09-11: **Embed yavaşlama teşhisi + çare** — llama.cpp 2.28.2 ~2 saatte 4x
   (ölçüm 1241: 3435→764/dk; restart 4944/dk'a döndürüyor, tam cure). RSS sabit
   (leak yok), hata yok, doküman/token boyu sabit → slot zamanlama patolojisi.
