@@ -110,6 +110,11 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-16: **VM internet kesintisi (UFW/Libvirt çakışması).** `LIBVIRT_FWO`
+  zincirinin başına yabancı REJECT satırı girmişti (VM→dış tüm trafik ölüyordu,
+  DHCP/host-yönü çalıştığı için gizli kaldı). Kural silindi, NAT doğrulandı.
+  Tekrarlarsa: `iptables -D LIBVIRT_FWO 1`. Kalıcı çözüm: UFW reload sonrası
+  kontrol (§12.3'e eklenecek).
 - 2026-09-16: **VM dosya köprüsü v3 (USB CD-ROM).** v2 ham ISO'yu disk diye
   takmıştı, Windows bölüm tablosu aradı (D: okunamadı). CD-ROM+USB olarak
   tekrar takıldı (ISO9660 optik sürücü). Ders kaydı v2 maddesinde.

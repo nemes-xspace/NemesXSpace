@@ -274,6 +274,8 @@ beyin.py + ingest_paket×9 | komuta_api.py.donduruldu mevcut.
 - Log anomalisi: son 24s error/critical + bekçi rolling boşluğu + izleme ALARM.log.
 
 ### 12.3 A-demeden-B listesi (otomatik eşikler)
+- UFW reload / libvirt restart sonrası: `LIBVIRT_FW[OI]` ilk satırı REJECT ise
+  sil (`iptables -D LIBVIRT_FWO 1`) — VM dış çıkışı ölür, belirti: DHCP var internet yok.
 - / <40G → cargo clean + yedek rotasyonu öner (tek komut).
 - /srv <100G → büyük iş (merge/FAISS) ONAYSIZ başlamaz.
 - Backup >26saat eski → timer kontrolü.
