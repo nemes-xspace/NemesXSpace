@@ -7,11 +7,13 @@
 
 ---
 
-## 1. SON SNAPSHOT — 16 Eyl 2026 13:30 (+03, date ile doğrulandı)
+## 1. SON SNAPSHOT — 16 Eyl 2026 13:35 (+03, date ile doğrulandı)
 
 | Kalem | Durum |
 |---|---|
-| Git | `main...origin/main` **[önünde: 3]** — `144def0`+`43ee3ec`+`a02d493` push bekliyor |
+| Git | `main...origin/main` **[önünde: 6]** — push bekliyor |
+| Denetim-2 | B-4 (salt) + STRICT_DENETIM + BUG-2 + B-5 + parse-resume **canlıda**
+  (`618d628`, migration 013 uygulandı, test 12/12, 3/3 servis active) |
 | cc100_tr | KAPANDI ✅ 109.271.443 vektör, merge 118G, FAISS-24 (4.1G+834M, ntotal doğrulandı) |
 | Denetim düzeltmeleri | B-1 (escrow+%10) + BUG-1 + B-3 **canlıda** (migration 012 uygulandı, restart yapıldı) |
 | Hafıza sistemi | Bu dosya + `durum-anlik.sh` + Garanti-8 ✅; anatomi §10 eklendi, tatbikat yapıldı |
@@ -22,7 +24,7 @@
 | Disk | /srv/beyin **211G** boş (%76; wiki dizini 506G bu diskte), / **80G** boş (%91) |
 | FAISS | 24 index, toplam ~7.4G (cc100 ~4.9G faiss+ids, diğer 23 ~2.5G) |
 | Yedek | komuta-backup timer günlük çalışıyor (saat ~00:1x bandı); son manuel:
-  `yedek/komuta-2026-09-16-manuel-144def0.db` (1.5G) |
+  `yedek/komuta-2026-09-16-manuel-618d628.db` (1.5G) |
 | E2E escrow | Tetikleyici: yeni corpus görevi dağıtımı (corpus tr tükenik olduğu için
   şu an yok; operatör yeni korpus açınca) → zincir: spot kanıt → batch kapanışı
   → escrow satırı → denetim geçişi → `ledger nedeni='escrow'` kontrolü |
