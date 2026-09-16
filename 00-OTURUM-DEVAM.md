@@ -15,7 +15,8 @@
   `[önünde: N]` sayısı esastır (bu satırdaki sayı YAZILMAZ — commitlendikçe
   eskir; N'i `git log origin/main..HEAD --oneline` ile gör) |
 | Denetim-2 | B-4 (salt) + STRICT_DENETIM + BUG-2 + B-5 + parse-resume **canlıda**
-  (`618d628`, migration 013 uygulandı, test 12/12, 3/3 servis active) |
+  (`618d628`, migration 013 uygulandı, 3/3 servis active) |
+| Testler | miner-core 12/12 + komuta-rs 6/6 (`b27a60c`; komuta ilk kez testli) |
 | cc100_tr | KAPANDI ✅ 109.271.443 vektör, merge 118G, FAISS-24 (4.1G+834M, ntotal doğrulandı) |
 | Denetim düzeltmeleri | B-1 (escrow+%10) + BUG-1 + B-3 **canlıda** (migration 012 uygulandı, restart yapıldı) |
 | Hafıza sistemi | Bu dosya + `durum-anlik.sh` + Garanti-8 ✅; anatomi §10 eklendi, tatbikat yapıldı |
