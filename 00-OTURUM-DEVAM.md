@@ -93,6 +93,9 @@ b1b3770 GPU geri | 26def41 GPU 300W
 - GPU elleme yok (operatör emri, 12 Eyl). Merkezi sunucu/VPS yok ilkesi.
 - SPOT %10 (siteyle uyumlu). Eşik 0.98 (kod) vs site 0.99 → site düzeltilecek.
 - Arşivde SİLME YOK ilkesi (taşıma var, silme yok).
+- **Kapsam kilidi (16 Eyl): SADECE MADENCİLİK.** Model çıkarma/damıtma/HF işi
+  ileri döneme ertelendi (1.4, 3.2). Odak: embed/kanıt/ödül/ağ. Bu kilit
+  değişmeden `model/` dizinine ve model iddialarına (site Y2) dokunulmaz.
 - Canlı komuta DB'ye ALTER/DROP YOK; sadece CREATE TABLE / ADD COLUMN
   (Garanti-3; migration'lar `komuta-rs/migrations/`da, boot'ta otomatik).
 

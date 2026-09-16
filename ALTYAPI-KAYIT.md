@@ -110,6 +110,9 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-16: **Kapsam kilidi: SADECE MADENCİLİK (operatör kararı).** Model
+  çıkarma/damıtma/HF işleri ertelendi (v1.2'de 1.4 + 3.2 ERTELENDİ işlendi).
+  Site Y2 iddiası yayınlanmayacak (kaldır/erte). `model/` dizini donduruldu.
 - 2026-09-16: **Kalanlar turu: v1.2 + 4 taslak.** Yol haritası v1.2 ayrı dosyada
   (`Belgeler/`, v1.1'e dokunulmadı): 1.1 sabitleri 800 mikro/50B, DONE işaretleri,
   metrik 110M+, %10 sertleştirme kotası, vesting şartı, bütçe yaşar-sırası.

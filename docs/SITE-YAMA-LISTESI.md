@@ -8,10 +8,11 @@
   → `"109M+ ..."` (8 dosya, aynı anahtar).
 - `index.html:373` fallback metni: "distilled from 40M vectors" → "109M vectors".
 
-## Y2. Ürün iddiası (DİKKAT — kelime onayı şart)
+## Y2. Ürün iddiası (DİKKAT — 16 Eyl kapsam kilidi: KALDIR/ERTELE)
 - `pre_free_1` (8 dil, satır ~382): "40M vektörden damıtılmış 7B sınıfı".
-  Soru: Free model GERÇEKTEN 40M'den mi damıtıldı? cc100 109M bittiğine göre
-  iddia güncellenmeli ya da damıtma bazı açıklanmalı. Öneri metin onaya sunulur.
+- Kapsam kilidi gereği model iddiası ŞİMDİ YAYINLANMAZ: bu satır ya kaldırılır
+  ya da "yakında" diline çevrilir. Sayı güncellemesi YAPILMAZ (yanıltıcı olur).
+  Damıtma başlayınca gerçek baza göre yeniden yazılır.
 
 ## Y3. FAISS/EPOCH bölümü
 - `index.st_faiss_n` + roadmap `road_5` ("FAISS index completion"):
