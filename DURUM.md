@@ -64,7 +64,7 @@
 - Site: CANLI ✅ (09 Eyl) — 404 çözüldü (repo private→public + Pages açıldı), root/miner/faq 200
 - İzleme: `nemes-izleme` timer+servis sağlıklı (journal'da 15dk kontroller, 0 alarm) — eski `izle.log` emekli, artık journal'a bakılır
 - Pipeline: `beyin_sira` anlık TAMAM turlarında (günde ~4000 restart normal, hepsi skip) — `sira.log` 18M (çift satır: servis+script ikisi de yazıyor, düşük öncelikli temizlik)
-- Disk: /srv/beyin ~104G boş (%89), / ~193G boş — merge dosyası /'de (118G), ana DB symlink; emb 12x7G + orig-bak 25G duruyor (arşiv kararı bekliyor)
+- Disk: /srv/beyin ~215G boş (%76), / ~82G boş — emb 12x7G + orig-bak 25G `/home/.../nemes-merge/arsiv/`'de (16 Eyl taşındı, silinen yok; merge kapsaması 1800 örnekle doğrulandı, 0 hata)
 - Reboot: 16 Eyl ~11:12 (uptime taze) — llama 0/6 (görev yok, bekliyor), servisler 6/6 active, yedek 00:02 taze
 - Eğitim: 4750/5900, loss 1.48, ETA ~8sa — bitince 10 soruluk test + final adapter
 - RAM: 30G total — yeterli (damıtma madencide, merkezde değil)

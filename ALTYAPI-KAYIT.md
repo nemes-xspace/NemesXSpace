@@ -107,6 +107,11 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-16: **cc100 arşiv taşındı (silme yok).** Merge kapsaması 1800 örnekle
+  doğrulandı (12 shard × 150 PK-seek, eksik=0 bozuk=0). emb 12x7G (84G) + orig-bak
+  25G → `/home/d3str0y1ng/nemes-merge/arsiv/` (mv, dosya dosya doğrulamalı).
+  /srv/beyin 104G→215G boş. Arşivden emb_0 spot-okundu (9.105.979). Canlı:
+  symlink merged (118G) + FAISS-24 + orig yok (arsivde).
 - 2026-09-15/16: **cc100_tr KAPANIŞ — embed+merge+FAISS DONE.** 12 işçi 15 Eyl
   0 yeniyle kapattı (w9 son 34.130). Toplam **109.271.443 vektör + 7.635 atlanan**
   (%101.2). Merge `/` bölmesine kopya üstüne (25G→118G, 1.3sa, INSERT OR IGNORE,
