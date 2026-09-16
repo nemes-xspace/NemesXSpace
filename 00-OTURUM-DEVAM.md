@@ -11,7 +11,7 @@
 
 | Kalem | Durum |
 |---|---|
-| Git | Son push: NemesXSpace `8836beb` ✅ (6 commit: triyaj turu) + site `a90ddf1` ✅ | Bekleyen: `git status -sb` çıktısındaki `[önünde: N]`
+| Git | Son push: NemesXSpace `03e65ad` ✅ + site `a90ddf1` ✅ | Bekleyen: `git status -sb` çıktısındaki `[önünde: N]`
   sayısı esastır (bu satırdaki sayı YAZILMAZ — commitlendikçe eskir;
   N'i `git log origin/main..HEAD --oneline` ile gör) |
 | Denetim-2 | B-4 (salt) + STRICT_DENETIM + BUG-2 + B-5 + parse-resume **canlıda**
