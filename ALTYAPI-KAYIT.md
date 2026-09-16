@@ -110,6 +110,10 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-16: **Windows VM kuruldu (win10-test).** Flash'taki 2019 Win10
+  kurulumundan xorriso ile 6.6G önyüklenebilir ISO üretildi, KVM: 8G/4CPU/60G
+  qcow2, SATA+e1000 (virtio sürücüsüz kurulum), NAT. `nemes-miner.exe` (28M)
+  çapraz derlendi, VM'ye aktarım + dış kayıt provası operatör kurulumunu bekliyor.
 - 2026-09-16: **Tor ucu provası GEÇTİ (tohum-0 0.3'e sayılır).** VM clipboard
   olmadığı için host-Tor kullanıldı (check.torproject IsTor:true). Tor çıkışı →
   dış kayıt 200 + status 200 (WAF-skip Tor'u da kapsıyor). Prova satırı silindi,
