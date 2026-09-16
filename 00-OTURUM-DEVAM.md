@@ -17,6 +17,7 @@
 | Denetim-2 | B-4 (salt) + STRICT_DENETIM + BUG-2 + B-5 + parse-resume **canlıda**
   (`618d628`, migration 013 uygulandı, 3/3 servis active) |
 | Testler | miner-core 12/12 + komuta-rs 8/8 (`1f39e1e`; escrow serbest/yanma dahil) |
+| Güvenlik | Komuta HTTP localhost-only (`d247ab8`, BIND_ADDR); P2P 4003 açık |
 | cc100_tr | KAPANDI ✅ 109.271.443 vektör, merge 118G, FAISS-24 (4.1G+834M, ntotal doğrulandı) |
 | Denetim düzeltmeleri | B-1 (escrow+%10) + BUG-1 + B-3 **canlıda** (migration 012 uygulandı, restart yapıldı) |
 | Hafıza sistemi | Bu dosya + `durum-anlik.sh` + Garanti-8 ✅; anatomi §10 eklendi, tatbikat yapıldı |
