@@ -110,6 +110,12 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-16: **Dalga A CANLI: caselaw kesimi.** 1242 kaldırıldı (2/2 llama ok);
+  drop-in `corpus.conf` (GOREV_CORPUS=caselaw) + restart; miner'lar üretiyor
+  (caselaw 20/20 kapanışlar + spot bayrakları canlı DB'de). İlk drop-in denemesi
+  dizin yokluğundan boşa düştü, yakalandı + düzeltildi (ders: mkdir önce).
+  Site paketi `nemes-xspace.github.io/miner/` altında HAZIR (zip+SHA256+KURULUM,
+  commit/push ONAYI bekliyor).
 - 2026-09-16: **Dalga A başladı: caselaw hattı + binary paketi.** wiki_caselaw
   454 madde embed+merge (0.2dk) + FAISS nlist32 (883K, 454 nokta 512 kümeye
   sığmadı). Kopya DB'de dağıtım provası: kayıt→20'lik görev→kanıt kabul.
