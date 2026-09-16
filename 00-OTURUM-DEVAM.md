@@ -110,6 +110,9 @@ localhost-only ✅ | Dalga A (caselaw→newscrawl kesimi) ✅ | site miner paket
 ## 6. KARAR DEFTERİ (değişmez kayıt)
 
 - **MİSYON (16 Eyl, operatör beyanı): KENDİ COİN + MERKEZİYETSİZ YAPAY ZEKA AĞI.**
+  Mimarî ilke: ÖRÜMCEK AĞI — yük komutada toplanmaz, madenciler aralarında
+  örülür; kurucu/komuta SADECE görev dağıtır (iş ispatı + denetim mesh'te).
+  30K/1M hesabı bu kabule göre yapılır (tek-komuta hesabı YANLIŞ bazdı).
   Tüm işler buna hizmet eder: coin tarafı (TOKENOMI kilitli → mainnet 1.1 →
   genesis → wallet), ağ tarafı (P2P → tohum-0 → bağımsız operatörler →
   kurucu-anahtar devri). Madencilik odağı bu misyonun Faz 0 adımıdır.
