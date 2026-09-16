@@ -2826,4 +2826,192 @@ mod tests {
             .fetch_one(&pool).await.unwrap();
         assert_eq!(defter, 0);
     }
+
+    /// B3: tam batch yaşam döngüsü GERÇEK handler'larla (:memory: DB).
+    /// kanit × 20 (kapanış) → escrow matematiği → denetim geçişi (serbest) →
+    /// çöp kanıt → 2 ret (slash+yakma) → defter tutarlılığı.
+    /// NOT: spot örneklemesi saltlı-rastgele; test bayrakları DB'den okuyup
+    /// ona göre sürer (yapıyı değil, mekaniği kilitler).
+    async fn test_state() -> std::sync::Arc<AppState> {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::migrate!("./migrations").run(&pool).await.unwrap();
+        let wiki = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        std::sync::Arc::new(AppState {
+            pool,
+            wiki,
+            http: reqwest::Client::new(),
+            matris: std::sync::Arc::new(tokio::sync::RwLock::new(VektorHavuzu::default())),
+            dagitim_kilidi: tokio::sync::Mutex::new(()),
+            master_pubkey_b64: String::new(),
+            corpus: "test".to_string(),
+            embed_api: String::new(),
+            embed_model: String::new(),
+            relay_dir: "/tmp".to_string(),
+            yedek_dir: "/tmp".to_string(),
+            gorev_yayin_tx: None,
+            strict_denetim: false,
+        })
+    }
+
+    fn test_headers(token: &str) -> HeaderMap {
+        let mut h = HeaderMap::new();
+        h.insert("authorization", format!("Bearer {}", token).parse().unwrap());
+        h
+    }
+
+    // Tohumlu sözde-rastgele 768B vektör: AYNI tohum AYNI yön (cos=1),
+    // FARKLI tohum ILISKISIZ yön (cos≈0). Sabit-desen KULLANMA (normalize
+    // olunca yönler çakışır, kosinüs hep 1.0 çıkar).
+    fn test_vektor(seed: u64) -> String {
+        let mut x = seed.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+        if x == 0 {
+            x = 0x9E3779B97F4A7C15;
+        }
+        let raw: Vec<u8> = (0..768)
+            .map(|_| {
+                x = x.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
+                (x >> 33) as u8
+            })
+            .collect();
+        base64::engine::general_purpose::STANDARD.encode(&raw)
+    }
+
+    #[tokio::test]
+    async fn test_batch_yasam_dongusu() {
+        let state = test_state().await;
+        // 2 madenci + 20'lik görev + kör eşleme.
+        for (mid, tok) in [("m1", "t1"), ("m2", "t2")] {
+            sqlx::query("INSERT INTO miners (miner_id, token, cuzdan, makine_id, created_at) VALUES (?, ?, 'c', 'mk', 1)")
+                .bind(mid).bind(tok).execute(&state.pool).await.unwrap();
+        }
+        sqlx::query("INSERT INTO gorevler (gorev_id, dagitilan_miner, corpus, offset, beklenen, alinan, durum, odul_mikro, ts) VALUES ('test:1', 'm1', 'test', 0, 20, 0, 'acik', 0, 1)")
+            .execute(&state.pool).await.unwrap();
+        for i in 0..20i64 {
+            sqlx::query("INSERT INTO kor_esleme (kor_id, madde_id, gorev_id, ts) VALUES (?, ?, 'test:1', 1)")
+                .bind(5000 + i).bind(1 + i).execute(&state.pool).await.unwrap();
+        }
+        // 20 kanıt (10+10), aynı dürüst vektör.
+        let vb = test_vektor(7);
+        let mut son = None;
+        for i in 0..20i64 {
+            let tok = if i % 2 == 0 { "t1" } else { "t2" };
+            let r = kanit(
+                State(state.clone()),
+                test_headers(tok),
+                Json(KanitReq { gorev_id: "test:1".to_string(), madde_id: 5000 + i, v_int8_b64: vb.clone(), v_min: 0.0, v_max: 1.0, imza: None }),
+            ).await.unwrap().0;
+            son = Some(r);
+        }
+        let son = son.unwrap();
+        assert!(son.kabul && son.batch_tamam, "batch kapanmali");
+        // Koruma: dagitilan toplam == batch odulu (temiz + emanet).
+        let odenen: i64 = sqlx::query_scalar("SELECT COALESCE(SUM(coin_mikro),0) FROM miners")
+            .fetch_one(&state.pool).await.unwrap();
+        let emanet: i64 = sqlx::query_scalar("SELECT COALESCE(SUM(miktar_mikro),0) FROM escrow")
+            .fetch_one(&state.pool).await.unwrap();
+        assert_eq!(odenen + emanet, 2000, "batch odulu korunmali (taban, kademe 0)");
+        // Bayraklı satırlar emanette, bayraksızlar odenmis.
+        let bayrakli: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM kanitlar WHERE gorev_id='test:1' AND spot_check=1 AND dogrulama IS NULL")
+            .fetch_one(&state.pool).await.unwrap();
+        let emanet_satir: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM escrow WHERE gorev_id='test:1'")
+            .fetch_one(&state.pool).await.unwrap();
+        assert_eq!(bayrakli, emanet_satir, "her supheli emanette olmali");
+        // Geçiş: bayraklı ilk kanıtı BAŞKA madenci aynı vektörle doğrular.
+        if bayrakli > 0 {
+            let (kor, gercek): (i64, i64) = sqlx::query_as(
+                "SELECT k.madde_id, k.madde_id FROM kanitlar k WHERE k.gorev_id='test:1' AND k.spot_check=1 AND k.dogrulama IS NULL LIMIT 1")
+                .fetch_one(&state.pool).await.unwrap();
+            // kor_id'yi eslemeden bul (kanitlar GERCEK id tutar).
+            let kor_id: i64 = sqlx::query_scalar("SELECT kor_id FROM kor_esleme WHERE gorev_id='test:1' AND madde_id=?")
+                .bind(gercek).fetch_one(&state.pool).await.unwrap();
+            let _ = kor;
+            let r = denetim_sonuc(
+                State(state.clone()),
+                test_headers("t2"),
+                Json(DenetimSonuc { gorev_id: "test:1".to_string(), madde_id: kor_id, v_int8_b64: Some(vb.clone()), v_min: Some(0.0), v_max: Some(1.0), dogrulama: None, gecerli: None }),
+            ).await.unwrap();
+            let v = r.0;
+            assert_eq!(v.get("gecerli").and_then(|x| x.as_bool()), Some(true), "ayni vektor gecmeli");
+            assert!((v.get("dogrulama").and_then(|x| x.as_f64()).unwrap_or(-1.0) - 1.0).abs() < 1e-5);
+        }
+        // Defter tutarlılığı: her madencide coin == ledger toplami.
+        for mid in ["m1", "m2"] {
+            let coin: i64 = sqlx::query_scalar("SELECT coin_mikro FROM miners WHERE miner_id=?")
+                .bind(mid).fetch_one(&state.pool).await.unwrap();
+            let defter: i64 = sqlx::query_scalar("SELECT COALESCE(SUM(delta_mikro),0) FROM ledger WHERE miner_id=?")
+                .bind(mid).fetch_one(&state.pool).await.unwrap();
+            assert_eq!(coin, defter, "defter tutarli olmali: {}", mid);
+        }
+    }
+
+    #[tokio::test]
+    async fn test_slash_yasam_dongusu() {
+        // Çöp kanıt → 2 bağımsız ret → slash + emanet yanar.
+        let state = test_state().await;
+        for (mid, tok) in [("m1", "t1"), ("m2", "t2"), ("m3", "t3")] {
+            sqlx::query("INSERT INTO miners (miner_id, token, cuzdan, makine_id, created_at) VALUES (?, ?, 'c', 'mk', 1)")
+                .bind(mid).bind(tok).execute(&state.pool).await.unwrap();
+        }
+        sqlx::query("INSERT INTO gorevler (gorev_id, dagitilan_miner, corpus, offset, beklenen, alinan, durum, odul_mikro, ts) VALUES ('test:9', 'm1', 'test', 0, 3, 0, 'acik', 0, 1)")
+            .execute(&state.pool).await.unwrap();
+        sqlx::query("INSERT INTO kor_esleme (kor_id, madde_id, gorev_id, ts) VALUES (9001, 41, 'test:9', 1)")
+            .execute(&state.pool).await.unwrap();
+        // m1 çöp basar (3 kanıtla batch'i kapatır; hangisi bayraklı olursa test onu kullanır).
+        let cop = test_vektor(200);
+        for k in [9001i64, 9002, 9003] {
+            sqlx::query("INSERT INTO kor_esleme (kor_id, madde_id, gorev_id, ts) VALUES (?, ?, 'test:9', 1)")
+                .bind(k).bind(k).execute(&state.pool).await.unwrap_or_default();
+        }
+        for k in [9001i64, 9002, 9003] {
+            kanit(
+                State(state.clone()),
+                test_headers("t1"),
+                Json(KanitReq { gorev_id: "test:9".to_string(), madde_id: k, v_int8_b64: cop.clone(), v_min: 0.0, v_max: 1.0, imza: None }),
+            ).await.unwrap();
+        }
+        // Bayraklı bir kanıt bul (yoksa zorla işaretle — örnekleyici ayrı testli).
+        let hedef: Option<(i64, i64)> = sqlx::query_as(
+            "SELECT kor_id, madde_id FROM (SELECT e.kor_id, e.madde_id FROM kor_esleme e JOIN kanitlar k ON k.gorev_id=e.gorev_id AND k.madde_id=e.madde_id WHERE e.gorev_id='test:9' AND k.spot_check=1 AND k.dogrulama IS NULL LIMIT 1)")
+            .fetch_optional(&state.pool).await.unwrap();
+        let (kor, _gercek) = match hedef {
+            Some(t) => t,
+            None => {
+                sqlx::query("UPDATE kanitlar SET spot_check=1 WHERE gorev_id='test:9' AND madde_id=41")
+                    .execute(&state.pool).await.unwrap();
+                // emanet satırını da üret (kapanışta yazılırdı).
+                sqlx::query("INSERT OR IGNORE INTO escrow (gorev_id, madde_id, miner_id, miktar_mikro, ts) VALUES ('test:9', 41, 'm1', 100, 1)")
+                    .execute(&state.pool).await.unwrap();
+                (9001i64, 41i64)
+            }
+        };
+        // m1'e biraz coin ver ki slash kesecek bakiye bulsun.
+        sqlx::query("UPDATE miners SET coin_mikro=5000 WHERE miner_id='m1'").execute(&state.pool).await.unwrap();
+        // 2 bağımsız ret, farklı çöp vektörlerle.
+        for (tok, desen) in [("t2", 11u64), ("t3", 77u64)] {
+            let r = denetim_sonuc(
+                State(state.clone()),
+                test_headers(tok),
+                Json(DenetimSonuc { gorev_id: "test:9".to_string(), madde_id: kor, v_int8_b64: Some(test_vektor(desen)), v_min: Some(0.0), v_max: Some(1.0), dogrulama: None, gecerli: None }),
+            ).await.unwrap();
+            let v = r.0;
+            assert_eq!(v.get("gecerli").and_then(|x| x.as_bool()), Some(false));
+        }
+        let strike: i64 = sqlx::query_scalar("SELECT strike FROM miners WHERE miner_id='m1'")
+            .fetch_one(&state.pool).await.unwrap();
+        assert_eq!(strike, 1, "slash sonrasi strike 1 olmali");
+        let slash_var: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM ledger WHERE miner_id='m1' AND neden='slash'")
+            .fetch_one(&state.pool).await.unwrap();
+        assert_eq!(slash_var, 1, "slash deftere islenmeli");
+        let emanet_kaldi: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM escrow WHERE gorev_id='test:9' AND madde_id=41")
+            .fetch_one(&state.pool).await.unwrap();
+        assert_eq!(emanet_kaldi, 0, "hile kesinlesen emanet yanmali");
+    }
 }
