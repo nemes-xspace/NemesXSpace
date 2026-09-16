@@ -110,6 +110,12 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-16: **Sıra zamanlayıcı temizliği.** `beyin_sira.service` sonsuz
+  `Restart=always` (20sn) döngüsünden oneshot+timer'a çevrildi
+  (`beyin_sira.timer`: 5dk, `temizlik.conf` drop-in). Çakışma `flock -n`
+  ile engelli (kilit: `kaynaklar/.beyin_sira.lock`; /run kullanıcıya kapalıydı).
+  Çift satır log bitti (stdout journal'a, dosyaya yalnız script yazar).
+  Doğrulama: 13:51 timer tetiklemesi başarılı, sonraki 13:56 kurulu.
 - 2026-09-16: **Komuta localhost bind (d247ab8).** HTTP `:8787` artik yalnizca
   127.0.0.1'de (BIND_ADDR env, default localhost; P2P 4003 etkilenmez). Dogrulama:
   ss'te 127.0.0.1:8787, miner'lar kopmadan polling, Caddy TLS yolu 200.
