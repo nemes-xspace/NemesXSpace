@@ -25,16 +25,16 @@
 | cc100_tr | KAPANDI ✅ 109.271.443 vektör, merge 118G, FAISS-24 (4.1G+834M, ntotal doğrulandı) |
 | Denetim düzeltmeleri | B-1 (escrow+%10) + BUG-1 + B-3 **canlıda** (migration 012 uygulandı, restart yapıldı) |
 | Hafıza sistemi | Bu dosya + `durum-anlik.sh` + Garanti-8 ✅; anatomi §10 eklendi, tatbikat yapıldı |
-| Arşiv | emb 12x7G + bak 25G → `/home/d3str0y1ng/nemes-merge/arsiv/` (109G, silinen yok) |
+| Arşiv | emb 12x7G + bak 25G + shard 12x2.2G → `/srv/beyin/arsiv_cc100/` (25 dosya, 161G, silinen yok) |
 | Servisler | 6/6 active + beyin_sira (ikisi de betikte sorgulanır) |
 | Llama | 1241 tekil `ok` (sorgu kapısı); 1242-1246 kapalı (görev yok) |
 | Miner'lar | Sağlıklı polling, `gorev:bekleniyor` (corpus tr tükenik — bilinen) |
-| Disk | /srv/beyin **242G** boş (%73; wiki dizini bu diskte), / **51G** boş (%95) |
+| Disk | /srv/beyin **104G** boş (%89; arşiv buraya taşındı), / **210G** boş (%77) |
 | FAISS | 24 index, toplam ~7.4G (cc100 ~4.9G faiss+ids, diğer 23 ~2.5G) |
 | Yedek | komuta-backup timer günlük çalışıyor (saat ~00:1x bandı); son manuel:
   `yedek/komuta-2026-09-16-manuel-618d628.db` (1.5G) |
 | E2E escrow | ✅ Kopya DB'de kanıtlandı (16 Eyl): geçiş+kalma+legacy+salt |
-| Arşiv | emb 12x7G + bak 25G + shard 12x2.2G → `nemes-merge/arsiv/` (135G, silinen yok) |
+| Arşiv | emb 12x7G + bak 25G + shard 12x2.2G → `/srv/beyin/arsiv_cc100/` (25 dosya, 161G, silinen yok, spot doğrulandı) |
 
 ## 2. KRİTİK YOL (07 Eyl revize)
 
@@ -56,7 +56,7 @@ Anahtar yollar:
   Ana DB (SYMLINK!): /srv/beyin/wiki/wiki_cc100_tr.db
       -> /home/d3str0y1ng/nemes-merge/wiki_cc100_tr_merged.db (118G)
   FAISS-24: /srv/beyin/wiki/wiki_cc100_tr.faiss (4.1G) + .ids.npy (834M)
-  Arsiv: /home/d3str0y1ng/nemes-merge/arsiv/ (13 dosya, 109G)
+  Arsiv: /srv/beyin/arsiv_cc100/ (25 dosya, 161G)
   Komuta DB: /home/d3str0y1ng/nemes-testnet/komuta.db (1.5G)
   Komuta bin: /home/d3str0y1ng/nemes-testnet/bin/ (.bak'lar yanında)
   Test loglari: /home/d3str0y1ng/nemes-merge/{merge,verify,arsiv,faiss_cc100}.log
