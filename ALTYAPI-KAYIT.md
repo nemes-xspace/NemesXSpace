@@ -110,6 +110,12 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-16: **Kalanlar turu: v1.2 + 4 taslak.** Yol haritası v1.2 ayrı dosyada
+  (`Belgeler/`, v1.1'e dokunulmadı): 1.1 sabitleri 800 mikro/50B, DONE işaretleri,
+  metrik 110M+, %10 sertleştirme kotası, vesting şartı, bütçe yaşar-sırası.
+  Yeni taslaklar (`docs/`, onay bekliyor): KURUCU-ANAHTAR (K1→K3), GDPR-SILME
+  (tombstone+rebuild+lisans+PII), TOHUM-0-KURULUM (DNS+modem checklist),
+  SITE-YAMA-LISTESI (Y1-Y5, site reposuna uygulanacak).
 - 2026-09-16: **E2E escrow provası GEÇTİ (kopya DB, :18787).** 20 kanıt→batch
   kapandı (1400 temiz + 600 emanet = 2000 tam); geçiş: cos 1.0→emanet serbest
   + ledger 'escrow'; kalma: 2 ret (0.73/0.74)→slash 2000 + strike + emanet yandı;
