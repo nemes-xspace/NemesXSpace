@@ -16,6 +16,9 @@
 7. **10-gün otonomi onayı (10 Eyl 2026, 1 hafta geçerli):** workspace + wiki +
    site dosyalarında okuma/yazma, servis restart, main'e push serbest.
    YASAK: disk silme, para harcama, dışarı mesaj atma. Push tokeni 1 hafta açık.
+8. **Oturum hafızası (16 Eyl, süresiz):** her ilerleme bitiminde
+   `00-OTURUM-DEVAM.md` §1 güncellenir; token bitiminde yeni profil
+   §7 protokolüyle devam eder. Token'lar dosyaya yazılmaz.
 
 ## 1. Envanter (2026-09-06 doğrulandı)
 
