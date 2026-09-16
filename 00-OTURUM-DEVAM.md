@@ -11,9 +11,10 @@
 
 | Kalem | Durum |
 |---|---|
-| Git | Son push: `035ceab` ✅ (10 commit) | Bekleyen: `git status -sb` çıktısındaki
-  `[önünde: N]` sayısı esastır (bu satırdaki sayı YAZILMAZ — commitlendikçe
-  eskir; N'i `git log origin/main..HEAD --oneline` ile gör) |
+| Git | Son push: NemesXSpace `d6e0c9b` ✅ + site `a90ddf1` ✅ (gerçek miner
+  yayında) | Bekleyen: `git status -sb` çıktısındaki `[önünde: N]` sayısı
+  esastır (bu satırdaki sayı YAZILMAZ — commitlendikçe eskir;
+  N'i `git log origin/main..HEAD --oneline` ile gör) |
 | Denetim-2 | B-4 (salt) + STRICT_DENETIM + BUG-2 + B-5 + parse-resume **canlıda**
   (`618d628`, migration 013 uygulandı, 3/3 servis active) |
 | Testler | miner-core 12/12 + komuta-rs 8/8 (`1f39e1e`; escrow serbest/yanma dahil) |
