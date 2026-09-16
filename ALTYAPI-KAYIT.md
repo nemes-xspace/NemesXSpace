@@ -110,6 +110,9 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-16: **VM dosya köprüsü v3 (USB CD-ROM).** v2 ham ISO'yu disk diye
+  takmıştı, Windows bölüm tablosu aradı (D: okunamadı). CD-ROM+USB olarak
+  tekrar takıldı (ISO9660 optik sürücü). Ders kaydı v2 maddesinde.
 - 2026-09-16: **VM dosya köprüsü v2 (USB-disk).** İlk deneme virtio veriyoluna
   takıldı (Windows sürücüsüz görmedi), SATA hotplug chipset'te yok → ISO USB
   disk olarak canlı takıldı. Ders: KVM'ye takılan her aygıtın Windows sürücüsü
