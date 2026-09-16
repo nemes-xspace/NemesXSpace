@@ -11,7 +11,7 @@
 
 | Kalem | Durum |
 |---|---|
-| Git | `main...origin/main` **[önünde: 6]** — push bekliyor |
+| Git | `main...origin/main` **[önünde: 7]** — push bekliyor |
 | Denetim-2 | B-4 (salt) + STRICT_DENETIM + BUG-2 + B-5 + parse-resume **canlıda**
   (`618d628`, migration 013 uygulandı, test 12/12, 3/3 servis active) |
 | cc100_tr | KAPANDI ✅ 109.271.443 vektör, merge 118G, FAISS-24 (4.1G+834M, ntotal doğrulandı) |
