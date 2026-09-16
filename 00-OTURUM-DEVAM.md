@@ -17,6 +17,7 @@
 | Denetim-2 | B-4 (salt) + STRICT_DENETIM + BUG-2 + B-5 + parse-resume **canlıda**
   (`618d628`, migration 013 uygulandı, 3/3 servis active) |
 | Testler | miner-core 12/12 + komuta-rs 10/10 (`48986cc`; batch/slash yaşam döngüsü gerçek handler'la) |
+| İzleme | 3 alarm triyajlandı: defter (yanlış alarm, düzeltildi) + sayaç (corpus-kör, düzeltildi) + kuyruk (gerçek, batch 20'ye büyütüldü `9f35d1a`) |
 | Güvenlik | Komuta HTTP localhost-only (`d247ab8`, BIND_ADDR); P2P 4003 açık |
 | Tören | 1024-karakter parola doğrulandı (16 Eyl): diskte kopyası YOK (kartta),
   history/repo sızıntısı YOK; redis: `offline-ceremony/` 3 script |
