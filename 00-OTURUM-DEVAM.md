@@ -11,7 +11,7 @@
 
 | Kalem | Durum |
 |---|---|
-| Git | Son push: `dfd647b` ✅ (13 commit) | Bekleyen: `git status -sb` çıktısındaki
+| Git | Son push: `4a939b2` ✅ (7 commit) | Bekleyen: `git status -sb` çıktısındaki
   `[önünde: N]` sayısı esastır (bu satırdaki sayı YAZILMAZ — commitlendikçe
   eskir; N'i `git log origin/main..HEAD --oneline` ile gör) |
 | Denetim-2 | B-4 (salt) + STRICT_DENETIM + BUG-2 + B-5 + parse-resume **canlıda**
