@@ -22,6 +22,8 @@
 | Tohum-0 | HTTP(S) tunnel ile CANLI ✅; eksik: CF WAF-skip (/api/*, sende) + 4003 modem (mesh için) |
 | Yol haritası | v1.2 ayrı dosyada (`Belgeler/`, 1.1 sabitleri düzeltildi) |
 | Taslaklar | Kurucu-anahtar + GDPR + Tohum-0 + Site-yama (`docs/`, onay bekliyor) |
+| Dalga A | caselaw 454 embed+merge+FAISS ✅, dağıtım provası ✅, miner paketi hazır
+  (`nemes-merge/paket/`, siteye yükleme ONAYI bekliyor). SIRADAKİ: canlı kesim |
 | cc100_tr | KAPANDI ✅ 109.271.443 vektör, merge 118G, FAISS-24 (4.1G+834M, ntotal doğrulandı) |
 | Denetim düzeltmeleri | B-1 (escrow+%10) + BUG-1 + B-3 **canlıda** (migration 012 uygulandı, restart yapıldı) |
 | Hafıza sistemi | Bu dosya + `durum-anlik.sh` + Garanti-8 ✅; anatomi §10 eklendi, tatbikat yapıldı |
