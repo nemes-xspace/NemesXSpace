@@ -78,17 +78,33 @@ b285836 arsiv (PUSH'LU) | c71fb4b cc100 kapanis (PUSH'LU) |
 b1b3770 GPU geri | 26def41 GPU 300W
 ```
 
-## 5. AÇIK İŞLER (öncelik sırasıyla)
+## 5. AÇIK İŞLER (16 Eyl 17:10 — sahip + boyuta göre)
 
-1. **Push 3 commit** (`144def0`+`43ee3ec`+`a02d493`; URL-gömülü basılır, §8).
-2. **E2E escrow kanıtı** ✅ DONE (16 Eyl, kopya DB) — zincir kapandı.
-3. **Denetim listesi kalan:** B-4 (spot salt), B-5 (tedarik hash, llama.rs),
-   BUG-2 (miner retry), parse-merge resume, öz-denetim engeli (mainnet öncesi).
-4. **Site senkronu:** 109M/24 index/coin+halving/kanarya özeti yayınlanacak
-   (dış denetim belgesi `~/Belgeler/NEMES X The Sovereign.md` gerekçe).
-5. **Kurucu anahtarı + GDPR/silme tasarımı** (iç boşluk, acil).
-6. **cc100 shard akıbeti** ✅ DONE (16 Eyl: 12×2.2G arşivde, spot okundu).
-7. Llama 1242-1246: yeni embed korpusu gelince RESUME sırasıyla kaldırılır.
+### BENDEN (onaysız başlayabilirim)
+- B1. Üretim izleme: newscrawl kapanışlarında spot/escrow/ledger zinciri (pasif).
+- B2. Site Y1/Y3/Y5 uygulama (Y2+Y4 kelime onayı gelirse; site push token ister).
+- B3. komuta integration testleri (batch/escrow akışı `:memory:` DB'de).
+- B4. Ölü `izle*.sh` temizliği + DURUM periyodik tazeleme.
+
+### SENDEN (operatör)
+- S1. Push tokeni (şu an 1 snapshot bekliyor).
+- S2. CF WAF-skip kuralı (`/api/*`, 2 dk).
+- S3. 4003 modem yönlendirme (tam mesh katılımı).
+- S4. Gerçek dış makineden miner provası (WAF sonrası).
+- S5. v1.2 onayı (imza belgen).
+- S6. Site Y2+Y4 kelime onayı.
+- S7. Avukat randevusu (0.9) + emanetçi/GDPR kararları.
+- S8. Windows .exe/EV + H motoru (ilk ödeyen müşteri).
+
+### BLOKELİ (dış bağımlılık)
+- X1. wet_en (disk) / paracrawl (S3 404) / caselaw-full (hesap).
+- X2. Bağımsız operatörler + topluluk kanalları.
+- X3. Mainnet takvimi (Kasım: 1.1 sabitleri, genesis, wallet, explorer).
+
+### KAPANDI (bu hafta)
+cc100 109M ✅ | merge+FAISS-24 ✅ | arşiv 161G ✅ | B-1→B-5+BUG-1/2 ✅ |
+E2E ✅ | localhost bind ✅ | miner UA ✅ | sıra timer ✅ | hafıza+tatbikat ✅ |
+localhost-only ✅ | Dalga A (caselaw→newscrawl kesimi) ✅ | site miner paketi ✅
 
 ## 6. KARAR DEFTERİ (değişmez kayıt)
 
