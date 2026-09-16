@@ -86,6 +86,11 @@ b1b3770 GPU geri | 26def41 GPU 300W
 
 ## 6. KARAR DEFTERİ (değişmez kayıt)
 
+- **MİSYON (16 Eyl, operatör beyanı): KENDİ COİN + MERKEZİYETSİZ YAPAY ZEKA AĞI.**
+  Tüm işler buna hizmet eder: coin tarafı (TOKENOMI kilitli → mainnet 1.1 →
+  genesis → wallet), ağ tarafı (P2P → tohum-0 → bağımsız operatörler →
+  kurucu-anahtar devri). Madencilik odağı bu misyonun Faz 0 adımıdır.
+
 - Tokenomik KİLİTLİ: coin+halving, tavan 210M, era1 800 mikro, HALVING 50B
   (testnet: 2000 mikro + 5M ile sürer; mainnet tek commit'le geçirilir).
 - Tek hat Rust CLI; miner-api/komuta_api.py/Tauri donduruldu; 6 iskelet `_arsiv/`de.
