@@ -11,8 +11,7 @@
 
 | Kalem | Durum |
 |---|---|
-| Git | Son push: NemesXSpace `65276af` ✅ (3 commit: dalga-A kapanışları)
-  + site `a90ddf1` ✅ | Bekleyen: `git status -sb` çıktısındaki `[önünde: N]`
+| Git | Son push: NemesXSpace `2318ce5` ✅ (6 commit) + site `a90ddf1` ✅ | Bekleyen: `git status -sb` çıktısındaki `[önünde: N]`
   sayısı esastır (bu satırdaki sayı YAZILMAZ — commitlendikçe eskir;
   N'i `git log origin/main..HEAD --oneline` ile gör) |
 | Denetim-2 | B-4 (salt) + STRICT_DENETIM + BUG-2 + B-5 + parse-resume **canlıda**
