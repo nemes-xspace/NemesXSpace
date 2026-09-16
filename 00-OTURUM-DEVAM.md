@@ -26,13 +26,12 @@
 | Servisler | 6/6 active + beyin_sira (ikisi de betikte sorgulanır) |
 | Llama | 1241 tekil `ok` (sorgu kapısı); 1242-1246 kapalı (görev yok) |
 | Miner'lar | Sağlıklı polling, `gorev:bekleniyor` (corpus tr tükenik — bilinen) |
-| Disk | /srv/beyin **211G** boş (%76; wiki dizini 506G bu diskte), / **80G** boş (%91) |
+| Disk | /srv/beyin **242G** boş (%73; wiki dizini bu diskte), / **51G** boş (%95) |
 | FAISS | 24 index, toplam ~7.4G (cc100 ~4.9G faiss+ids, diğer 23 ~2.5G) |
 | Yedek | komuta-backup timer günlük çalışıyor (saat ~00:1x bandı); son manuel:
   `yedek/komuta-2026-09-16-manuel-618d628.db` (1.5G) |
-| E2E escrow | Tetikleyici: yeni corpus görevi dağıtımı (corpus tr tükenik olduğu için
-  şu an yok; operatör yeni korpus açınca) → zincir: spot kanıt → batch kapanışı
-  → escrow satırı → denetim geçişi → `ledger nedeni='escrow'` kontrolü |
+| E2E escrow | ✅ Kopya DB'de kanıtlandı (16 Eyl): geçiş+kalma+legacy+salt |
+| Arşiv | emb 12x7G + bak 25G + shard 12x2.2G → `nemes-merge/arsiv/` (135G, silinen yok) |
 
 ## 2. KRİTİK YOL (07 Eyl revize)
 
@@ -74,14 +73,13 @@ b1b3770 GPU geri | 26def41 GPU 300W
 ## 5. AÇIK İŞLER (öncelik sırasıyla)
 
 1. **Push 3 commit** (`144def0`+`43ee3ec`+`a02d493`; URL-gömülü basılır, §8).
-2. **E2E escrow kanıtı** — tetikleyici §1'de; zincir orada yazılı.
+2. **E2E escrow kanıtı** ✅ DONE (16 Eyl, kopya DB) — zincir kapandı.
 3. **Denetim listesi kalan:** B-4 (spot salt), B-5 (tedarik hash, llama.rs),
    BUG-2 (miner retry), parse-merge resume, öz-denetim engeli (mainnet öncesi).
 4. **Site senkronu:** 109M/24 index/coin+halving/kanarya özeti yayınlanacak
    (dış denetim belgesi `~/Belgeler/NEMES X The Sovereign.md` gerekçe).
 5. **Kurucu anahtarı + GDPR/silme tasarımı** (iç boşluk, acil).
-6. **cc100 shard 12×2.2G akıbeti:** merge kaynağı olarak duruyor; öneri arşive
-   taşıma (SİLME YOK ilkesi korunarak), karar operatörde.
+6. **cc100 shard akıbeti** ✅ DONE (16 Eyl: 12×2.2G arşivde, spot okundu).
 7. Llama 1242-1246: yeni embed korpusu gelince RESUME sırasıyla kaldırılır.
 
 ## 6. KARAR DEFTERİ (değişmez kayıt)
@@ -156,7 +154,7 @@ FAISS PQ32, nlist 512/1024, nprobe=128 | EMBED nomic-1.5 768d, int8, BATCH=16.
 
 ### 10.4 Veri haritası (boyut | rol)
 wiki_en 38G, gut_en 46G, newscrawl 48G, cc100 symlink→118G merged,
-cc100 shard 12×2.2G (26G, duruyor), de 16G, ru 16G, fr 13G, arxiv 12G,
+cc100 shard 12×2.2G (26G, 16 Eyl arşivde), de 16G, ru 16G, fr 13G, arxiv 12G,
 es 11G, ja 9.2G, ar 5.9G, pt 5.1G, zh 4.8G, tr 2.4G + diğer dillerin
 emb-ara çıktıları ~80 parça. FAISS 24 adet 7.4G. done bayrağı 24 adet
 (`kaynaklar/sira_*.done`). testnet bin/ 125M, yedek/ 21G (14 dosya).

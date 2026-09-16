@@ -110,6 +110,13 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-16: **E2E escrow provası GEÇTİ (kopya DB, :18787).** 20 kanıt→batch
+  kapandı (1400 temiz + 600 emanet = 2000 tam); geçiş: cos 1.0→emanet serbest
+  + ledger 'escrow'; kalma: 2 ret (0.73/0.74)→slash 2000 + strike + emanet yandı;
+  legacy skor 400; salt 32B. Canlıya dokunulmadı (escrow 0, cursor 4724762),
+  kopya silindi. Kanıt logları: `nemes-merge/e2e/`.
+- 2026-09-16: **Shard 12×2.2G arşivlendi** (26G → `nemes-merge/arsiv/`,
+  spot: shard_0 9.106.643 madde okundu). /srv/beyin 242G boş. Silinen yok.
 - 2026-09-16: **Sıra zamanlayıcı temizliği.** `beyin_sira.service` sonsuz
   `Restart=always` (20sn) döngüsünden oneshot+timer'a çevrildi
   (`beyin_sira.timer`: 5dk, `temizlik.conf` drop-in). Çakışma `flock -n`
