@@ -110,6 +110,9 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-16: **VM sanal kablo kapalıymış (`link state='down'`).** Windows "hiçbir
+  ağ yok" diyordu, sayaçlar çalışıyordu (DHCP önceden alınmış). `domif-setlink
+  up` ile açıldı. Ders: `domiflist` yetmez, `dumpxml` link satırı da okunur.
 - 2026-09-16: **VM internet kesintisi (UFW/Libvirt çakışması).** `LIBVIRT_FWO`
   zincirinin başına yabancı REJECT satırı girmişti (VM→dış tüm trafik ölüyordu,
   DHCP/host-yönü çalıştığı için gizli kaldı). Kural silindi, NAT doğrulandı.
