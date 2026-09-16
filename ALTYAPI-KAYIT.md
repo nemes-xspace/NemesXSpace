@@ -110,6 +110,10 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-16: **Komuta localhost bind (d247ab8).** HTTP `:8787` artik yalnizca
+  127.0.0.1'de (BIND_ADDR env, default localhost; P2P 4003 etkilenmez). Dogrulama:
+  ss'te 127.0.0.1:8787, miner'lar kopmadan polling, Caddy TLS yolu 200.
+  Eski binary `.20260916-bind.bak`'ta. DB degisikligi yok (yedek gerekmedi).
 - 2026-09-16: **Denetim-2 deploy edildi (618d628).** B-4 migration 013 `spot_salt`
   (günlük salt) + STRICT_DENETIM env (default 0) + BUG-2 retry + B-5 hash pini +
   parse OR-IGNORE resume (wiki_parse_par.py, git-dışı). Yedek:
