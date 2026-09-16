@@ -2683,3 +2683,81 @@ async fn main() -> anyhow::Result<()> {
 
     Ok(())
 }
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn b64_768(doldur: impl Fn(usize) -> u8) -> String {
+        let raw: Vec<u8> = (0..768).map(doldur).collect();
+        base64::engine::general_purpose::STANDARD.encode(&raw)
+    }
+
+    #[test]
+    fn test_dequantize_roundtrip() {
+        let b64 = b64_768(|i| (i % 256) as u8);
+        let v = dequantize_int8(&b64, 0.0, 1.0).expect("cozulmeli");
+        assert_eq!(v.len(), 768);
+        assert!((v[0] - 0.0).abs() < 1e-6);
+        assert!((v[255] - 1.0).abs() < 1e-6);
+        // monotonluk: q buyudukce deger buyur
+        assert!(v[255] > v[128] && v[128] > v[0]);
+    }
+
+    #[test]
+    fn test_dequantize_red() {
+        // yanlis boy (100 bayt)
+        let kisa = base64::engine::general_purpose::STANDARD.encode(&vec![0u8; 100]);
+        assert!(dequantize_int8(&kisa, 0.0, 1.0).is_none());
+        // bozuk base64
+        assert!(dequantize_int8("!!!degil!!!", 0.0, 1.0).is_none());
+        // sifir aralik
+        let b64 = b64_768(|_| 42);
+        assert!(dequantize_int8(&b64, 1.0, 1.0).is_none());
+        // NaN aralik
+        assert!(dequantize_int8(&b64, 0.0, f32::NAN).is_none());
+    }
+
+    #[test]
+    fn test_kosinus() {
+        let a = vec![1.0f32, 0.0, 0.0];
+        let b = vec![1.0f32, 0.0, 0.0];
+        assert!((kosinus(&a, &b) - 1.0).abs() < 1e-5);
+        let c = vec![0.0f32, 1.0, 0.0];
+        assert!(kosinus(&a, &c).abs() < 1e-5);
+        let d = vec![-1.0f32, 0.0, 0.0];
+        assert!((kosinus(&a, &d) + 1.0).abs() < 1e-5);
+        // olcekten bagimsiz (normalize kosinus)
+        let e = vec![5.0f32, 0.0, 0.0];
+        assert!((kosinus(&a, &e) - 1.0).abs() < 1e-5);
+    }
+
+    #[test]
+    fn test_corpus_kodu() {
+        let k1 = corpus_kodu("tr");
+        let k2 = corpus_kodu("tr");
+        assert_eq!(k1, k2); // deterministik
+        assert_eq!(k1.len(), 8); // 4 bayt hex
+        assert!(k1.chars().all(|c| c.is_ascii_hexdigit()));
+        assert_ne!(k1, corpus_kodu("en")); // corpus ayirimi
+    }
+
+    #[test]
+    fn test_halving_matematigi() {
+        assert_eq!(current_batch_reward_micro(0), BATCH_ODUL_TABAN_MIKRO);
+        assert_eq!(current_batch_reward_micro(HALVING_BATCH - 1), BATCH_ODUL_TABAN_MIKRO);
+        assert_eq!(current_batch_reward_micro(HALVING_BATCH), BATCH_ODUL_TABAN_MIKRO / 2);
+        assert_eq!(current_batch_reward_micro(2 * HALVING_BATCH), BATCH_ODUL_TABAN_MIKRO / 4);
+        // 31+ halving = sifir (tavan kilidi)
+        assert_eq!(current_batch_reward_micro(31 * HALVING_BATCH), 0);
+        assert_eq!(current_batch_reward_micro(i64::MAX / 2), 0);
+    }
+
+    #[test]
+    fn test_esik_sabiti() {
+        // Site 0.99 yazar, kod 0.98 uygular — bu test kodun gercegini kilitler.
+        // Site duzeltilmeden esik DEGISMEZ (ekonomik davranis degisir).
+        assert!((DENETIM_ESIK - 0.98).abs() < 1e-6);
+        assert_eq!(SPOT_CHECK_YUZDE, 10);
+        assert_eq!(TASK_BATCH, 20);
+    }
+}
