@@ -2760,4 +2760,63 @@ mod tests {
         assert_eq!(SPOT_CHECK_YUZDE, 10);
         assert_eq!(TASK_BATCH, 20);
     }
+
+    async fn test_havuzu() -> SqlitePool {
+        let pool = SqlitePoolOptions::new()
+            .max_connections(1)
+            .connect("sqlite::memory:")
+            .await
+            .unwrap();
+        sqlx::query(
+            "CREATE TABLE escrow (gorev_id TEXT NOT NULL, madde_id INTEGER NOT NULL, miner_id TEXT NOT NULL, miktar_mikro INTEGER NOT NULL, ts INTEGER NOT NULL, PRIMARY KEY (gorev_id, madde_id))"
+        ).execute(&pool).await.unwrap();
+        sqlx::query(
+            "CREATE TABLE miners (miner_id TEXT PRIMARY KEY, coin_mikro INTEGER DEFAULT 0)"
+        ).execute(&pool).await.unwrap();
+        sqlx::query(
+            "CREATE TABLE ledger (miner_id TEXT, delta_mikro INTEGER, neden TEXT, epoch INTEGER, ts INTEGER)"
+        ).execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO miners (miner_id, coin_mikro) VALUES ('m1', 1000)")
+            .execute(&pool).await.unwrap();
+        pool
+    }
+
+    #[tokio::test]
+    async fn test_escrow_serbest_birakma() {
+        // Uretimdeki serbest-birakma SQL'lerinin aynisi: coin+ledger+delete.
+        let pool = test_havuzu().await;
+        sqlx::query("INSERT INTO escrow (gorev_id, madde_id, miner_id, miktar_mikro, ts) VALUES ('g1', 7, 'm1', 100, 1)")
+            .execute(&pool).await.unwrap();
+        sqlx::query("UPDATE miners SET coin_mikro = coin_mikro + 100 WHERE miner_id = 'm1'")
+            .execute(&pool).await.unwrap();
+        sqlx::query("INSERT INTO ledger (miner_id, delta_mikro, neden, epoch, ts) VALUES ('m1', 100, 'escrow', 1, 1)")
+            .execute(&pool).await.unwrap();
+        sqlx::query("DELETE FROM escrow WHERE gorev_id = 'g1' AND madde_id = 7")
+            .execute(&pool).await.unwrap();
+        let coin: i64 = sqlx::query_scalar("SELECT coin_mikro FROM miners WHERE miner_id = 'm1'")
+            .fetch_one(&pool).await.unwrap();
+        assert_eq!(coin, 1100);
+        let defter: i64 = sqlx::query_scalar("SELECT COALESCE(SUM(delta_mikro), 0) FROM ledger WHERE miner_id = 'm1'")
+            .fetch_one(&pool).await.unwrap();
+        assert_eq!(defter, 100); // defter tutarliligi (bakiye kosulu)
+        let kalan: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM escrow")
+            .fetch_one(&pool).await.unwrap();
+        assert_eq!(kalan, 0);
+    }
+
+    #[tokio::test]
+    async fn test_escrow_yanma() {
+        // Slash'ta emanet silinir, coin ve deftere DOKUNULMAZ (odenmemisti).
+        let pool = test_havuzu().await;
+        sqlx::query("INSERT INTO escrow (gorev_id, madde_id, miner_id, miktar_mikro, ts) VALUES ('g2', 9, 'm1', 250, 1)")
+            .execute(&pool).await.unwrap();
+        sqlx::query("DELETE FROM escrow WHERE gorev_id = 'g2' AND madde_id = 9")
+            .execute(&pool).await.unwrap();
+        let coin: i64 = sqlx::query_scalar("SELECT coin_mikro FROM miners WHERE miner_id = 'm1'")
+            .fetch_one(&pool).await.unwrap();
+        assert_eq!(coin, 1000);
+        let defter: i64 = sqlx::query_scalar("SELECT COALESCE(SUM(delta_mikro), 0) FROM ledger WHERE miner_id = 'm1'")
+            .fetch_one(&pool).await.unwrap();
+        assert_eq!(defter, 0);
+    }
 }

@@ -1,8 +1,10 @@
-# NEMES-X GÖREV DURUMU — 08 Eyl 10:40 (senkron)
+# NEMES-X GÖREV DURUMU — 16 Eyl 13:40 (senkron)
 > ANAYASA v3.0 (yerel /srv/beyin, 320 madde). GITHUB'DA YOK.
 
 ## TAMAMLANAN ✅ — GÜNCEL KRİTİK YOL
 - **#1 ULTRA 4K60 render bitir + encode + publish — DONE ✅** (31 Ağu 19:50 işaretlendi, %97 → %100)
+- **#2 cc100_tr embed + merge + FAISS-24 — DONE ✅** (15 Eyl: 109.271.443 vektör, 118G merge, 4.1G index, ntotal doğrulandı; 16 Eyl arşivlendi)
+- **#3 Denetim sertleştirme B-1→B-5 — DONE ✅** (16 Eyl: escrow+%10 salt, retry, hash pini, parse resume; migration 012+013 canlıda)
 
 ## TAMAMLANAN ✅
 
