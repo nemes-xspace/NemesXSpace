@@ -19,6 +19,8 @@
   (`618d628`, migration 013 uygulandı, 3/3 servis active) |
 | Testler | miner-core 12/12 + komuta-rs 8/8 (`1f39e1e`; escrow serbest/yanma dahil) |
 | Güvenlik | Komuta HTTP localhost-only (`d247ab8`, BIND_ADDR); P2P 4003 açık |
+| Tören | 1024-karakter parola doğrulandı (16 Eyl): diskte kopyası YOK (kartta),
+  history/repo sızıntısı YOK; redis: `offline-ceremony/` 3 script |
 | Sıra | Timer kalıbı (`beyin_sira.timer` 5dk + flock; `e5cfdb9`) |
 | Tohum-0 | HTTP(S) tunnel ile CANLI ✅; eksik: CF WAF-skip (/api/*, sende) + 4003 modem (mesh için) |
 | Yol haritası | v1.2 ayrı dosyada (`Belgeler/`, 1.1 sabitleri düzeltildi) |
