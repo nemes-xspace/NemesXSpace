@@ -110,6 +110,10 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-16: **Tor ucu provası GEÇTİ (tohum-0 0.3'e sayılır).** VM clipboard
+  olmadığı için host-Tor kullanıldı (check.torproject IsTor:true). Tor çıkışı →
+  dış kayıt 200 + status 200 (WAF-skip Tor'u da kapsıyor). Prova satırı silindi,
+  tor servisi durduruldu. Kalan: gerçek dış makine + 4003 modem.
 - 2026-09-16: **Alarm triyajı (izleme çalışıyor, 3 alarm).** (1) Defter tutarsızlığı
   YANLIŞ alarm: eşzamanlı ödemede iki ayrı sorgu yarışıyordu → TEK sorguluk
   atomik kontrole çevrildi, sustu. (2) Çift-dağıtım patlaması: corpus-kör sayaç
