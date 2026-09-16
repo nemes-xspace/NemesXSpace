@@ -176,7 +176,59 @@ BAYAT: 00-PROJE-TANIMI (28 Ağu), README (28 Ağu) — okunur ama karar için
 ALTYAPI geçerlidir. docs/: TOKENOMI kilitli, GUVENLIK kör-ID+kanarya,
 YOL-HARITASI v1.1, 2 manifesto adayı, odul-stratejisi ARSIV'de.
 
-### 10.6 Bilinen açıklar (denetim 16 Eyl, dosya:satır referanslı)
+### 10.6 Bilinen açıklar (güncel 16 Eyl)
+CANLIDA: B-1 escrow+%10 ✅ | BUG-1 index ✅ | B-3 legacy kalktı ✅ |
+B-4 salt ✅ | B-5 hash pini ✅ | BUG-2 retry ✅ | parse resume ✅ |
+STRICT_DENETIM env ✅ | localhost bind ✅ | miner UA ✅ | E2E provası ✅.
+AÇIK: öz-denetim warn-only (STRICT=1 mainnet öncesi) | site 0.99 vs kod 0.98
+(site düzeltilecek) | miner-api sabit JWT (dondurulmuş kodda, canlıda değil) |
+miner token ps-görünürlüğü | TUI mock (site iddiasıyla çelişmemeli).
+
+### 10.7 Servis envanteri (tam, 16 Eyl süpürme)
+beyin-sunucu (llama başlatıcı) | beyin_bekci (15sn) + KillMode drop-in |
+beyin_sira (timer 5dk + flock) | beyin_wikihow (wikihow 2 işçi resume) |
+nemes-embed-bundle (:1251 self-contained 194M) | cloudflared (+günlük update timerı) |
+komuta-backup (günlük, `nemes-testnet/scripts/backup-db.py`) |
+nemes-izleme-hizli (15dk) + gunluk (06:00) | nemes-komuta/miner-a/b |
+caddy (User=caddy, /etc/caddy/Caddyfile) | mini7-dongu (gece ajan turu) |
+cron: fwupd-izle (06:00) + antikor-fp (Pzt 06:30). Timer'sız ölüler: `izle*.sh`
+(tmux dönemi bitti, silinebilir aday).
+
+### 10.8 Ev dizini haritası (ölçülü)
+`BEYIN`→/srv/beyin link | `kalitim/` 1.6G (günlük sabah raporları + opencode geçmişi —
+ikinci hafıza, okunmadı detayı) | `nemes-egitim/` 15G (eğitim BİTMİŞ: adapter
+checkpoint'ler + yanit-final 07 Eyl) | `nemes-bundle/` 194M | `Scriptler/` 612K |
+`tools/` qwen-agent | `snap/` 23G | `bin/` boş | islem/encoded/decoded = test artığı.
+
+### 10.9 /srv/beyin derinlik (süpürme)
+kaynaklar 149G (cc_en 111G!) | website 4.2G (video_frames_white 3.6G şişkin!) |
+model-v01 1.2G (train.jsonl) | ozel/ pazarlama docs (REKLAM/X-POST/HF-PLAN/KIMLIK) |
+testler/mini7 gece turu | beyin.db (bilgi/deneyim/hata/gorev/miner + FTS) |
+ANAYASA **v4.0** (31 Ağu, 320 madde — DURUM'daki "v3.0" BAYAT) |
+beyin.py + ingest_paket×9 | komuta_api.py.donduruldu mevcut.
+
+### 10.10 Kod artıkları (süpürme)
+- komuta sabitleri (tam): DEADLINE 600sn, ÖLÜ 300sn, HAVUZ_YENİLE 120sn,
+  SHARD_SURE 1800sn, REPLİKA 3, ONARIM ödül 100, YOKLAMA 1MiB/1800sn/5dk,
+  MIN_KOTA 100GiB, ARA k=5/20. `komut`: imha (kara+strike3+pay/coin0) /
+  affet (strike0/itibar100). Heartbeat 4096 parça limiti.
+- miner TUI **MOCK** (sabit 14.2/s demo); gerçek iş `--simple`da. Site "indir"
+  iddiasıyla çelişmemeli.
+- P2P: gossip derece 4/12, MAX_PEERS 100; ceremony: offline parola + AES-256-PBKDF2(2M).
+- miner-api dondurulmuş AMA içinde sabit JWT secret dizesi var (canlıda değil).
+- İkinci deploy profili: `komuta-rs/deploy/nemes-komuta-public.service`
+  (~/nemes-public, Mem 12G, CPU %400) — tohum-0 aday konfigürasyonu.
+- Miner token'ları ps çıktısında görünebilir (dosyadan okunuyor ama cmdline riski) —
+  log hijyenine eklenecek madde.
+
+## 11. KÖR NOKTA DERSLERİ (16 Eyl — bu hatalar tekrarlanmayacak)
+1. Config dosyası okunmadan "biliyorum" denmez (tünel dersi).
+2. Varsayım taşınmaz: eski nottaki cümle, canlı config ile doğrulanır.
+3. İkinci profiller aranır (public.service, bundle :1251, mini7, wikihow işçileri).
+4. Sürüm kayması kontrol edilir (ANAYASA v3/v4, site sayıları, sabitler).
+5. Secret'lar ps/env/log'da aranır, dosyaya yazılmaz.
+6. Ölü kod/script (izle*.sh, dondurulmuş API) envanterde "ölü" işaretlenir.
+7. Tatbikat her büyük hafıza değişiminde tekrarlanır.
 B-1 escrow ✅canlı | BUG-1 index ✅canlı | B-3 legacy ✅kalktı |
 B-4 spot salt ⏳ | B-5 llama.rs hash yok ⏳ | BUG-2 miner retry yok ⏳ |
 parse-merge yıkıcı ⏳ | öz-denetim warn-only ⏳ | site 0.99/0.98 + %10 uyumsuzluğu:
