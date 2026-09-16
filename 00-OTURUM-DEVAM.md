@@ -27,6 +27,7 @@
 | Taslaklar | Kurucu-anahtar + GDPR + Tohum-0 + Site-yama (`docs/`, onay bekliyor) |
 | Dalga A | ✅ CANLI: caselaw 454/454 bitti → **newscrawl_tr kesildi** (üretim:
   26K+ kanıt, 1665 emanet satırı/166K mikro CANLIDA — mekanizma üretimde doğrulandı) |
+| Windows | win10-test VM kuruluyor (8G/4CPU/60G, ISO hazır); `nemes-miner.exe` 28M hazır |
 | cc100_tr | KAPANDI ✅ 109.271.443 vektör, merge 118G, FAISS-24 (4.1G+834M, ntotal doğrulandı) |
 | Denetim düzeltmeleri | B-1 (escrow+%10) + BUG-1 + B-3 **canlıda** (migration 012 uygulandı, restart yapıldı) |
 | Hafıza sistemi | Bu dosya + `durum-anlik.sh` + Garanti-8 ✅; anatomi §10 eklendi, tatbikat yapıldı |
