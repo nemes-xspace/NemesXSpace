@@ -110,6 +110,8 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-16: **Operatör kiti v1 taslağı** (`docs/`, onay bekliyor) + bitiş
+  analizi (`docs/BITIS-ANALIZI.md`: teknik %70+, darboğaz operatör/hukuk/ekonomi).
 - 2026-09-16: **Corpus kesimi newscrawl_tr (56.5M madde).** caselaw 454/454
   bitince drop-in güncellendi + restart; miner'lar yeni görevlerde üretiyor
   (tamamlanan 100+, vectors/s>0, canlı DB'de `newscrawl_tr:*` kapanışlar).
