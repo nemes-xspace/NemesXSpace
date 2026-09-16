@@ -70,6 +70,7 @@ impl EmbedClient {
         let base_url: String = base_url.into();
         let model: String = model.into();
         let client = reqwest::Client::builder()
+            .user_agent(MINER_USER_AGENT)
             .timeout(Duration::from_secs(120))
             .build()
             .expect("reqwest client oluşturulamadı");
@@ -135,6 +136,11 @@ impl EmbedClient {
     }
 }
 
+/// Komuta-yonu HTTP istemcilerin User-Agent'i (CF bot korumasindan gecis + taninirlik).
+/// NOT: kalici cozum CF tarafinda /api/* WAF-muafiyetidir (operator); bu baslik
+/// ikinci savunmadir. Localhost embed trafiginde etkisi yok.
+pub const MINER_USER_AGENT: &str = "NEMES-Miner/0.2 (testnet; +https://nemes-x.space)";
+
 /// BUG-2 duzeltmesi: gecici hatalarda ustel beklemeli retry (max 4 deneme).
 /// 500 (ctx-asimi) retry ile duzelmez -> hemen doner (caller atlanan'a isler
 /// veya gorevi atlar). Donus Err ise caller `?` ile OLMEZ, gorevi atlar.
@@ -172,6 +178,7 @@ impl GorevAlici {
     pub fn new(base_url: impl Into<String>, token: impl Into<String>) -> Self {
         let base_url: String = base_url.into();
         let client = reqwest::Client::builder()
+            .user_agent(MINER_USER_AGENT)
             .timeout(std::time::Duration::from_secs(30))
             .build()
             .expect("reqwest client");
@@ -217,6 +224,7 @@ impl KanitGonderici {
     pub fn new(base_url: impl Into<String>, token: impl Into<String>) -> Self {
         let base_url: String = base_url.into();
         let client = reqwest::Client::builder()
+            .user_agent(MINER_USER_AGENT)
             .timeout(std::time::Duration::from_secs(30))
             .build()
             .expect("reqwest client");

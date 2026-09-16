@@ -1,6 +1,6 @@
 // Copyright (c) 2026 NEMES-X. All Rights Reserved. Unauthorized use prohibited.
 use clap::{Parser, Subcommand};
-use miner_core::{get_gpu_info, MiningStats, WorkerState};
+use miner_core::{get_gpu_info, MiningStats, WorkerState, MINER_USER_AGENT};
 use std::time::Duration;
 use atty;
 
@@ -197,6 +197,7 @@ fn token_coz(flag: &str) -> anyhow::Result<String> {
 // Komuta /api/status'tan miner_id ogren (shard ilani icin gerekli).
 async fn miner_id_ogren(komuta: &str, token: &str) -> anyhow::Result<String> {
     let client = reqwest::Client::builder()
+        .user_agent(MINER_USER_AGENT)
         .timeout(Duration::from_secs(10))
         .build()?;
     let r = client
@@ -257,6 +258,7 @@ async fn simple_mine(_gpu: &str, komuta: &str, token: &str, embed_api: &str, mod
         }
     };
     let shard_http = reqwest::Client::builder()
+        .user_agent(MINER_USER_AGENT)
         .timeout(Duration::from_secs(10))
         .build()?;
     let shard_claim = |sk: &SigningKey, mid: &str| -> anyhow::Result<()> {
