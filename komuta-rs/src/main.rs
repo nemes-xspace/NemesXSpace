@@ -2666,7 +2666,14 @@ async fn main() -> anyhow::Result<()> {
         });
     }
 
-    let addr = SocketAddr::from(([0, 0, 0, 0], port));
+    // HTTP baglama adresi: BIND_ADDR=127.0.0.1 default (guvenlik).
+    // Dis erisim Caddy (TLS) uzerinden; dogrudan LAN erisimi gerekmez.
+    // P2P (4003) mesh icin ayri sokettedir, bundan etkilenmez.
+    let bind_ip: std::net::IpAddr = std::env::var("BIND_ADDR")
+        .unwrap_or_else(|_| "127.0.0.1".to_string())
+        .parse()
+        .unwrap_or(std::net::IpAddr::V4(std::net::Ipv4Addr::LOCALHOST));
+    let addr = SocketAddr::new(bind_ip, port);
     info!("Komuta API başlatılıyor: http://{}", addr);
     info!("Master pubkey: {}", &state.master_pubkey_b64[..20]);
     info!("Görev corpus: {}", state.corpus);
