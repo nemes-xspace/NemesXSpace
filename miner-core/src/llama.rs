@@ -17,6 +17,8 @@ pub struct LlamaServer {
     n_gpu_layers: i32,
     ctx_size: usize,
     n_threads: usize,
+    /// B-5: blake3 hex pin (None = dogrulama yok, uyari basilir).
+    model_hash_pin: Option<String>,
 }
 
 impl LlamaServer {
@@ -31,7 +33,14 @@ impl LlamaServer {
             n_gpu_layers: 99,  // tüm layer'ları GPU'ya
             ctx_size: 2048,
             n_threads: 4,
+            model_hash_pin: None,
         }
+    }
+
+    /// B-5: beklenen model blake3 hex'ini sabitle (surgu manifestinden gelir).
+    pub fn with_model_hash(mut self, hex: impl Into<String>) -> Self {
+        self.model_hash_pin = Some(hex.into());
+        self
     }
 
     /// Binary yolu - önce local `binaries/` sonra PATH'te ara
@@ -96,6 +105,21 @@ impl LlamaServer {
     pub fn start(&mut self) -> Result<()> {
         if self.child.is_some() {
             return Err(anyhow!("Sunucu zaten çalışıyor"));
+        }
+
+        // B-5: model dosyasi pinlendiyse blake3 dogrula (tedarik zinciri).
+        if let Some(pin) = &self.model_hash_pin {
+            let veri = std::fs::read(&self.model_path)
+                .map_err(|e| anyhow!("model dosyasi okunamadi: {}", e))?;
+            let ozet = blake3::hash(&veri);
+            if ozet.to_hex().as_str() != pin.to_lowercase().as_str() {
+                return Err(anyhow!(
+                    "model hash uyusmadi (beklenen {}, hesaplanan {})",
+                    pin, ozet.to_hex()
+                ));
+            }
+        } else {
+            eprintln!("[llama] UYARI: model hash pini yok, tedarik dogrulanmadan baslatiliyor");
         }
 
         let mut cmd = Command::new(&self.binary_path);
@@ -204,6 +228,12 @@ pub fn global_llama_server() -> &'static LlamaServer {
     })
 }
 
+/// B-5: dosyanin blake3 hex'ini hesapla (pin uretimi icin operator araci).
+pub fn blake3_dosya(yol: &Path) -> Result<String> {
+    let veri = std::fs::read(yol).map_err(|e| anyhow!("dosya okunamadi: {}", e))?;
+    Ok(blake3::hash(&veri).to_hex().to_string())
+}
+
 /// llama-server'ı indir ve `binaries/` klasörüne koy
 pub fn download_llama_server() -> Result<PathBuf> {
     use std::io::Write;
@@ -274,5 +304,15 @@ mod tests {
         let server = LlamaServer::new("test.gguf", 1241);
         assert_eq!(server.port, 1241);
         assert_eq!(server.n_gpu_layers, 99);
+    }
+
+    #[test]
+    fn test_blake3_dosya_roundtrip() {
+        let yol = std::env::temp_dir().join("nemes-hash-test.bin");
+        std::fs::write(&yol, b"nemes-test-vektoru").unwrap();
+        let h = blake3_dosya(&yol).unwrap();
+        assert_eq!(h, blake3::hash(b"nemes-test-vektoru").to_hex().to_string());
+        assert_eq!(h.len(), 64);
+        std::fs::remove_file(&yol).ok();
     }
 }

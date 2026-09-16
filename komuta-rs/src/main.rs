@@ -82,6 +82,9 @@ struct AppState {
     /// dagitimi buraya atar, shard-abone gorevi mesh'e yayinlar (R4/P2P).
     /// HTTP dagitim yolu bundan etkilenmez (hata yoksayilir).
     gorev_yayin_tx: Option<tokio::sync::mpsc::UnboundedSender<Vec<u8>>>,
+    /// Oz-denetim engeli (mainnet oncesi acilir): denetci kendi kanitini
+    /// denetleyemez. Testnet toleransi icin default kapali (sadece warn).
+    strict_denetim: bool,
 }
 
 #[derive(Deserialize)]
@@ -314,12 +317,39 @@ fn corpus_kodu(corpus: &str) -> String {
     hex::encode(&h.as_bytes()[..4])
 }
 
-/// Deterministik spot-check: ayni (gorev, madde) hep ayni karari verir.
-/// blake3(gorev_id + madde_id) ilk bayt % 100 < SPOT_CHECK_YUZDE ise denetim.
-fn spot_check_gerekli(gorev_id: &str, madde_id: i64) -> bool {
+/// B-4: salt'li spot-check. blake3(gorev_id + madde_id + gunluk_salt).
+/// Salt gunluk get-or-create ile DB'de tutulur: gun ici deterministik
+/// (tekrarlanabilir denetim), gunler arasi ongorulemez (seckinci durustluk engeli).
+async fn spot_check_gerekli(pool: &SqlitePool, gorev_id: &str, madde_id: i64) -> bool {
+    let now = current_epoch();
+    let gun = now / 86400;
+    let salt: Vec<u8> = match sqlx::query_scalar("SELECT salt FROM spot_salt WHERE gun = ?")
+        .bind(gun)
+        .fetch_optional(pool)
+        .await
+    {
+        Ok(Some(s)) => s,
+        _ => {
+            let mut s = vec![0u8; 32];
+            rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut s);
+            let _ = sqlx::query("INSERT OR IGNORE INTO spot_salt (gun, salt, ts) VALUES (?, ?, ?)")
+                .bind(gun)
+                .bind(&s)
+                .bind(now)
+                .execute(pool)
+                .await;
+            sqlx::query_scalar("SELECT salt FROM spot_salt WHERE gun = ?")
+                .bind(gun)
+                .fetch_optional(pool)
+                .await
+                .unwrap_or(None)
+                .unwrap_or(s)
+        }
+    };
     let mut h = blake3::Hasher::new();
     h.update(gorev_id.as_bytes());
     h.update(&madde_id.to_le_bytes());
+    h.update(&salt);
     let digest = h.finalize();
     (digest.as_bytes()[0] % 100) < SPOT_CHECK_YUZDE
 }
@@ -1314,7 +1344,7 @@ async fn kanit(
     }
 
     let now = current_epoch();
-    let spot = spot_check_gerekli(&req.gorev_id, madde_gercek);
+    let spot = spot_check_gerekli(&state.pool, &req.gorev_id, madde_gercek).await;
 
     // Kaniti kaydet (anlik odul 0; odul batch tamamlaninca dagitilir).
     // Ic izlerde GERCEK id (supurme/denetim tutarliligi icin).
@@ -1690,6 +1720,9 @@ async fn denetim_sonuc(    State(state): State<Arc<AppState>>,
     let ret_onceki: i64 = orow.get("ret");
     let ureten: String = orow.get("miner_id");
     if ureten == denetci {
+        if state.strict_denetim {
+            return Err((StatusCode::FORBIDDEN, "Oz-denetim yasak (STRICT_DENETIM)".to_string()));
+        }
         warn!("Oz-denetim (testnet toleransli): denetci={} kendi kanitini denetliyor gorev={} kor={}", denetci, req.gorev_id, req.madde_id);
     }
 
@@ -2432,6 +2465,9 @@ async fn main() -> anyhow::Result<()> {
             .unwrap_or_else(|| std::path::PathBuf::from("/tmp"))
             .to_string_lossy().to_string()
     });
+    // Oz-denetim engeli: STRICT_DENETIM=1 ise denetci kendi kanitini denetleyemez.
+    // Testnet default 0 (toleransli, sadece warn); mainnet oncesi 1 yapilir.
+    let strict_denetim = std::env::var("STRICT_DENETIM").unwrap_or_else(|_| "0".to_string()) != "0";
 
     let db_url = if db_path.starts_with('/') {
         format!("sqlite:{}", db_path)
@@ -2505,6 +2541,7 @@ async fn main() -> anyhow::Result<()> {
         relay_dir: relay_dir.clone(),
         yedek_dir: yedek_dir.clone(),
         gorev_yayin_tx: if gorev_yayin_acik { Some(gorev_yayin_tx) } else { None },
+        strict_denetim,
     });
     info!("Parca relay: {} | yedek: {}", relay_dir, yedek_dir);
 

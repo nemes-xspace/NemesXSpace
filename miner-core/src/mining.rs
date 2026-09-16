@@ -135,6 +135,31 @@ impl EmbedClient {
     }
 }
 
+/// BUG-2 duzeltmesi: gecici hatalarda ustel beklemeli retry (max 4 deneme).
+/// 500 (ctx-asimi) retry ile duzelmez -> hemen doner (caller atlanan'a isler
+/// veya gorevi atlar). Donus Err ise caller `?` ile OLMEZ, gorevi atlar.
+pub async fn embed_retry(client: &EmbedClient, metinler: &[String]) -> anyhow::Result<Vec<Vec<f32>>> {
+    let mut bekle = Duration::from_secs(2);
+    for deneme in 0..4 {
+        match client.embed_batch(metinler).await {
+            Ok(v) => return Ok(v),
+            Err(e) => {
+                let msg = e.to_string();
+                if msg.contains("HTTP 500") {
+                    return Err(e); // ctx-asimi kalici, retry faydasiz
+                }
+                if deneme == 3 {
+                    return Err(e);
+                }
+                eprintln!("[embed] hata (deneme {}/4): {} - {:?} sonra tekrar", deneme + 1, msg, bekle);
+                tokio::time::sleep(bekle).await;
+                bekle *= 2;
+            }
+        }
+    }
+    unreachable!("retry dongusu dustu")
+}
+
 /// Görev alıcı - komuta API'den görev çeker
 #[derive(Clone)]
 pub struct GorevAlici {
@@ -336,8 +361,14 @@ pub async fn mining_loop(
                     continue;
                 }
 
-                // Embed et
-                let embeddings = embed_client.embed_batch(&metinler).await?;
+                // Embed et (retry'li; kalici hata -> gorevi atla, OLME)
+                let embeddings = match embed_retry(&embed_client, &metinler).await {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!("[worker-{}] embed basarisiz, gorev atlaniyor: {}", worker_id, e);
+                        continue;
+                    }
+                };
 
                 // Madde ID'leri payload'dan al veya index olarak kullan
                 let madde_idler: Vec<usize> = payload.as_ref()
@@ -374,7 +405,13 @@ pub async fn mining_loop(
                     continue;
                 }
 
-                let embeddings = embed_client.embed_batch(&metinler).await?;
+                let embeddings = match embed_retry(&embed_client, &metinler).await {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!("[worker-{}] denetim embed basarisiz, atlaniyor: {}", worker_id, e);
+                        continue;
+                    }
+                };
                 (embeddings, madde_idler, Some(refs), None)
             }
             "rag" => {
@@ -383,11 +420,18 @@ pub async fn mining_loop(
                     .and_then(|v| v.as_str())
                     .ok_or_else(|| anyhow::anyhow!("RAG sorgusu eksik"))?;
                 
-                let embeddings = embed_client
-                    .clone()
-                    .with_query_prefix()
-                    .embed_batch(&[query.to_string()])
-                    .await?;
+                let embeddings = match embed_retry(
+                    &embed_client.clone().with_query_prefix(),
+                    &[query.to_string()],
+                )
+                .await
+                {
+                    Ok(v) => v,
+                    Err(e) => {
+                        eprintln!("[worker-{}] RAG embed basarisiz, atlaniyor: {}", worker_id, e);
+                        continue;
+                    }
+                };
                 
                 let madde_idler = vec![0]; // RAG için tek sonuç
                 (embeddings, madde_idler, None, None)
