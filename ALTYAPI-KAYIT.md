@@ -110,6 +110,9 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-16: **Gece nöbeti (win madenci).** 30dk örneklemeli `nemes-merge/gece-gozlem.sh`
+  (18 tur ≈ 9 saat): win pay/kanıt/spot/geçti/kaldı + toplam + escrow + llama +
+  servis + hata + disk. Taban 23:19: win 6971 pay, ağ 1.55M kanıt, 49K emanet.
 - 2026-09-16: **İLK WINDOWS KANITI ✅ (win10-test).** Zincir: görev alındı ama
   embed 10060 zaman aşımına düştü → sebep UFW INPUT (1247 kapalı) → kural açıldı
   (192.168.122.0/24 → 1247/8080) → retry döngüsü kendiliğinden toparladı, ilk
