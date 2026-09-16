@@ -27,7 +27,7 @@ const COIN_UNIT: i64 = 1_000_000;
 const BATCH_ODUL_TABAN_MIKRO: i64 = 2_000; // batch basina 0.002 NEMES (kademe 0)
 const HALVING_BATCH: i64 = 5_000_000; // her 5M tamamlanan batch'te odul yariya iner (=100M kanit)
 const SPOT_CHECK_YUZDE: u8 = 10; // kanitlarin %10'u rastgele denetime duser (site ile uyumlu; B-1)
-const DENETIM_BATCH: i64 = 5; // bir denetim gorevinde en fazla kac kayit
+const DENETIM_BATCH: i64 = 20; // bir denetim gorevinde en fazla kac kayit (sel tasmamasi icin 5->20, 16 Eyl)
 const DENETIM_ODUL_MIKRO: i64 = 50; // denetim sonucu basina denetci ucreti (0.00005 NEMES)
 const DENETIM_ESIK: f32 = 0.98; // kosinus alti = kaldi
 const SLASH_MIKRO: i64 = 2_000; // kesinlesen hilede geri alim (1 batch bedeli)

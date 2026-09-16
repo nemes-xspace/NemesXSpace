@@ -110,6 +110,14 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-16: **Alarm triyajı (izleme çalışıyor, 3 alarm).** (1) Defter tutarsızlığı
+  YANLIŞ alarm: eşzamanlı ödemede iki ayrı sorgu yarışıyordu → TEK sorguluk
+  atomik kontrole çevrildi, sustu. (2) Çift-dağıtım patlaması: corpus-kör sayaç
+  eski `tr` + yeni `newscrawl` ID çakışmasını sayıyormuş (örnek: madde 62074 iki
+  corpus'ta iki belge) + kanarya negatifleri → corpus-bazlı sayaca çevrildi,
+  sustu; aynı-görev çifti UNIQUE ile zaten imkansız. (3) Denetim kuyruğu GERÇEK
+  birikim (5000+): bayrak girişi denetim çıkışının ~50 katı → DENETIM_BATCH
+  5→20 büyütüldü, deploy edildi (`.20260916-denetimbak.bak`). İzleme 1 alarma indi.
 - 2026-09-16: **CF WAF-skip CANLI (operatör kurdu, doğrulandı).** Çıplak UA
   (`WAF-Probe/1.0`) ile dış kayıt 200 döndü; prova satırı silindi. Dış miner
   kapısı resmen açık → tohum-0 0.3 kapanışa bir adım (kalan: gerçek dış makine).
