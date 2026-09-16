@@ -110,6 +110,10 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-16: **İLK WINDOWS KANITI ✅ (win10-test).** Zincir: görev alındı ama
+  embed 10060 zaman aşımına düştü → sebep UFW INPUT (1247 kapalı) → kural açıldı
+  (192.168.122.0/24 → 1247/8080) → retry döngüsü kendiliğinden toparladı, ilk
+  kanıtlar aktı (352 kanıt/pay 351). BUG-2 retry tasarımının ilk canlı kanıtı.
 - 2026-09-16: **VM sanal kablo kapalıymış (`link state='down'`).** Windows "hiçbir
   ağ yok" diyordu, sayaçlar çalışıyordu (DHCP önceden alınmış). `domif-setlink
   up` ile açıldı. Ders: `domiflist` yetmez, `dumpxml` link satırı da okunur.
