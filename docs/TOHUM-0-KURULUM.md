@@ -1,28 +1,30 @@
 # Tohum-0 Kurulum Checklist — operatör (ev makinesi)
 
 > Hedef (0.3): `komuta.` DNS + TLS + dışarıdan kayıt→görev→kanıt turu yeşil.
-> Kod tarafı hazır (P2P duyuru, komuta-rs, miner). Aşağıdakiler SENDE.
+> Durum 16 Eyl: **HTTP(S) bacağı CANLI** — Cloudflare Tunnel
+> (`komuta.nemes-x.space` → 127.0.0.1:80 → Caddy → 127.0.0.1:8787),
+> DNS Cloudflare'de, dış prova 200 döndü. **Modem ayarı GEREKMİYOR (HTTP için).**
 
-## A. DNS (alan adı paneli)
-- [ ] `komuta.nemes-x.space` → ev dış IP'sine A kaydı (TTL 300).
-- [ ] Doğrulama: `dig +short komuta.nemes-x.space` ev IP'sini dönmeli.
+## A. DNS — ✅ YAPILDI (Cloudflare)
+- `komuta.nemes-x.space` Cloudflare edge'e bağlı (tunnel route).
+- Doğrulandı: dig CF IP'leri + dış curl 200.
 
-## B. Modem (port yönlendirme)
-- [ ] 80/tcp → komuta makinesi (TLS onayı için).
-- [ ] 443/tcp → komuta makinesi (Caddy TLS bitirir).
-- [ ] 4003/tcp → komuta makinesi (P2P mesh).
-- [ ] 8787 DIŞA AÇILMAZ (localhost-only; dış erişim Caddy üzerinden).
-- [ ] Doğrulama (dış ağdan, örn. telefon): `curl -s https://komuta.nemes-x.space/api/arz | head -c 60`.
+## B. Cloudflare paneli — SENDE (2 dk)
+- [ ] WAF → `komuta.nemes-x.space/api/*` için **Skip kuralı** (Bot Fight Mode
+  çıplak API istemcilerini 1010 ile kesiyor; 16 Eyl kanıtlandı).
+  Kural yoksa dış miner'lar kayıt olamaz. Miner UA (`NEMES-Miner/0.2`)
+  ikinci savunmadır, yerine geçmez.
+- [ ] TLS modu: Full (Strict) önerilir (Caddy'de otomatik sertifika var).
 
-## C. Makine (benim provamla birlikte)
-- [ ] Caddyfile'a `komuta.nemes-x.space` bloğu (TLS otomatik).
-- [ ] `nemes-komuta` + `caddy` restart, journal temiz.
-- [ ] Dış prova turu: kayıt → görev → kanıt → status (ben çalıştırırım, sen izlersin).
+## C. Modem — SADECE P2P İÇİN (mesh'e tam katılım istenirse)
+- [ ] 4003/tcp → komuta makinesi (tünel ham TCP taşımaz).
+- [ ] 80/443/8787 AÇILMAZ (tünel + localhost-only yeterli).
+- [ ] UPnP kapalı, modem şifresi varsayılan değil.
 
-## D. Güvenlik notları
-- [ ] Modem yönetici şifresi varsayılan DEĞİL.
-- [ ] UPnP kapalı (elle yönlendirme esastır).
-- [ ] Elektrik kesintisi sonrası servisler otomatik (enabled Birimler: komuta/miner/caddy/tunnel).
+## D. Dış prova turu (benimle birlikte)
+- [x] Dış curl 200 (16 Eyl).
+- [x] Dış kayıt 200 (UA ile, 16 Eyl; test satırı temizlendi).
+- [ ] Gerçek dış makineden miner kaydı + ilk pay (WAF kuralından sonra).
 
 ## Kabul kriteri
 Dışarıdan 1 madenci kaydı + ilk payı alır → 0.3 DONE, Faz 0→1 kapısı için sayılır.

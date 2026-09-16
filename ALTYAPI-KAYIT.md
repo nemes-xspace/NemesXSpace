@@ -110,6 +110,13 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-16: **Tohum-0 gerçeği + CF bot bulgusu.** Tünel config okundu:
+  HTTP(S) Cloudflare Tunnel ile CANLI (modem gereksiz), P2P 4003 tünelden
+  geçmez (mesh için modem yönlendirme ayrıca gerekir). Dış prova: curl 200,
+  kayıtsız UA 403 (1010) / tarayıcı UA 200. Çözüm iki kol: miner UA
+  (`NEMES-Miner/0.2`, deploy edildi, dış status 200 doğrulandı) +
+  operatör CF WAF-skip kuralı (/api/*). Test satırları canlı DB'den silindi.
+  TOHUM-0-KURULUM.md gerçekle uyumlu hale getirildi.
 - 2026-09-16: **Kapsam kilidi: SADECE MADENCİLİK (operatör kararı).** Model
   çıkarma/damıtma/HF işleri ertelendi (v1.2'de 1.4 + 3.2 ERTELENDİ işlendi).
   Site Y2 iddiası yayınlanmayacak (kaldır/erte). `model/` dizini donduruldu.
