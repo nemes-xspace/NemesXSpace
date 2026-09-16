@@ -556,13 +556,33 @@ async fn ara_get(
     Ok(Json(ara_calistir(&state, &sorgu, k).await?))
 }
 
+/// Kilit-bekleme metriği (ölçek gözetimi, 16 Eyl): dagitim_kilidi için toplam
+/// bekleme + sayım. 500ms üstü tekil warn, her 1000 kilitte ortalama info.
+/// Eşik aşımı = federasyon ihtiyacı sinyali (yol haritası Faz 2).
+static KILIT_TOPLAM_MS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static KILIT_SAYI: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+
+async fn kilit_al(kilit: &tokio::sync::Mutex<()>) -> tokio::sync::MutexGuard<'_, ()> {
+    let t0 = std::time::Instant::now();
+    let g = kilit.lock().await;
+    let ms = t0.elapsed().as_millis() as u64;
+    let n = KILIT_SAYI.fetch_add(1, std::sync::atomic::Ordering::Relaxed) + 1;
+    let top = KILIT_TOPLAM_MS.fetch_add(ms, std::sync::atomic::Ordering::Relaxed) + ms;
+    if ms > 500 {
+        warn!("kilit-bekleme yuksek: {}ms ({}-nci kilit)", ms, n);
+    } else if n % 1000 == 0 {
+        info!("kilit-istatistik: {} kilit, ortalama {}ms", n, top / n.max(1));
+    }
+    g
+}
+
 /// Shard ilanini kaydet: imza + kayit + TOFU pubkey bagi + cursor'a
 /// sabitleme + cakisma kontrolu. Donen: (baslangic, bitis).
 async fn kaydet_ilan(state: &Arc<AppState>, ilan: &ShardIlan, kaynak: &str) -> Result<(i64, i64), String> {
     ilan.dogrula().map_err(|e| format!("ilan gecersiz: {}", e))?;
     let pool = &state.pool;
     // Sabitleme kritik bolumde: kontrol-et + yaz tek sira (cift sabitleme yarisini bitirir).
-    let _kilit = state.dagitim_kilidi.lock().await;
+    let _kilit = kilit_al(&state.dagitim_kilidi).await;
 
     // Miner kayitli mi?
     let mrow = sqlx::query("SELECT pubkey_b64 FROM miners WHERE miner_id = ?")
@@ -834,7 +854,7 @@ async fn gorev(
     }
 
     // Kritik bolum: cursor oku -> dagit -> cursor yaz tek sira.
-    let _kilit = state.dagitim_kilidi.lock().await;
+    let _kilit = kilit_al(&state.dagitim_kilidi).await;
     let now_ts0b = current_epoch();
 
     // Onarım önceliği: kotası olan miner'a eksik kopyalı parçaları ver (C7).
@@ -2474,9 +2494,20 @@ async fn main() -> anyhow::Result<()> {
     } else {
         format!("sqlite:{}", db_path)
     };
+    // Ölçek ayarı (16 Eyl): WAL + NORMAL + 30sn busy-timeout. WAL okur-yazar
+    // eszamanliligini artirir (tek-yazar kilidi surer ama okurlar bloklanmaz);
+    // NORMAL WAL'da guvenlidir; yedekleme API'si WAL ile uyumludur.
+    // NOT: ag diski/NFS'te WAL kullanma (yerel SSD varsayimi).
+    let copts: sqlx::sqlite::SqliteConnectOptions = db_url
+        .parse()
+        .map_err(|e| anyhow::anyhow!("DB URL hatasi: {}", e))?;
+    let copts = copts
+        .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
+        .synchronous(sqlx::sqlite::SqliteSynchronous::Normal)
+        .busy_timeout(std::time::Duration::from_secs(30));
     let pool = SqlitePoolOptions::new()
         .max_connections(10)
-        .connect(&db_url)
+        .connect_with(copts)
         .await?;
 
     sqlx::migrate!("./migrations").run(&pool).await?;
@@ -2825,6 +2856,17 @@ mod tests {
         let defter: i64 = sqlx::query_scalar("SELECT COALESCE(SUM(delta_mikro), 0) FROM ledger WHERE miner_id = 'm1'")
             .fetch_one(&pool).await.unwrap();
         assert_eq!(defter, 0);
+    }
+
+    #[tokio::test]
+    async fn test_kilit_metrik() {
+        // Metrik sayaci her kilitte genau 1 artar (ölçek gözetiminin temeli).
+        let m = tokio::sync::Mutex::new(());
+        let n0 = KILIT_SAYI.load(std::sync::atomic::Ordering::Relaxed);
+        { let _g = kilit_al(&m).await; }
+        { let _g = kilit_al(&m).await; }
+        let n1 = KILIT_SAYI.load(std::sync::atomic::Ordering::Relaxed);
+        assert_eq!(n1, n0 + 2);
     }
 
     /// B3: tam batch yaşam döngüsü GERÇEK handler'larla (:memory: DB).
