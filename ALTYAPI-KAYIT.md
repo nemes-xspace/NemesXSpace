@@ -110,6 +110,12 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-16: **Denetim-2 deploy edildi (618d628).** B-4 migration 013 `spot_salt`
+  (günlük salt) + STRICT_DENETIM env (default 0) + BUG-2 retry + B-5 hash pini +
+  parse OR-IGNORE resume (wiki_parse_par.py, git-dışı). Yedek:
+  `yedek/komuta-2026-09-16-manuel-618d628.db`; eski binary'ler
+  `.20260916-denetim2.bak`'ta. Canlıda `escrow`+`spot_salt` doğrulandı,
+  3/3 servis active, miner polling. Test: 12/12.
 - 2026-09-16: **Denetim B-1/BUG-1/B-3 deploy edildi (144def0).** SPOT %1→%10;
   batch dagitimi emanetli (migration 012 `escrow`, CREATE-only); geciste serbest
   bırakma, slash'ta yakma; legacy istemci skoru kaldirildi; miner embed_batch
