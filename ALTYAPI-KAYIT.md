@@ -107,6 +107,13 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-16: **Denetim B-1/BUG-1/B-3 deploy edildi (144def0).** SPOT %1→%10;
+  batch dagitimi emanetli (migration 012 `escrow`, CREATE-only); geciste serbest
+  bırakma, slash'ta yakma; legacy istemci skoru kaldirildi; miner embed_batch
+  index-yerlestirmeli. Yedek: `yedek/komuta-2026-09-16-manuel-144def0.db` (1.5G);
+  eski binary'ler `.20260916-escrow.bak`'ta. Restart: komuta PID 87372 (:8787+
+  :4003 canlı, health ok), miner'lar polling (corpus tukenik, 204-bekliyor).
+  E2E escrow ilk gercek dagitimda kanitlanacak (su an dagitilacak gorev yok).
 - 2026-09-16: **cc100 arşiv taşındı (silme yok).** Merge kapsaması 1800 örnekle
   doğrulandı (12 shard × 150 PK-seek, eksik=0 bozuk=0). emb 12x7G (84G) + orig-bak
   25G → `/home/d3str0y1ng/nemes-merge/arsiv/` (mv, dosya dosya doğrulamalı).
