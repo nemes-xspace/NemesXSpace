@@ -110,6 +110,13 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-16: **Paranoyak tur-1 (Garanti-9 kuruldu).** Bulgular: izleme servisi
+  ölü bulundu (bayat beklentiler) → düzeltildi (0 alarm); miner token'ları
+  ps'te çıplak bulundu → env-file'a alındı (drop-in, 0 eşleşme doğrulandı);
+  yedek restore provası geçti (integrity ok, 19 tablo); repo leak taraması temiz
+  (vite FP hariç); cert 9 Ara (84 gün); / %95 baskısı → cargo clean 12.8G +
+  yedek rotasyonu 9 dosya + soğuk arşiv /srv/beyin'e taşınıyor.
+  Hafızaya §12 protokol + §11 kuralları işlendi.
 - 2026-09-16: **Tohum-0 gerçeği + CF bot bulgusu.** Tünel config okundu:
   HTTP(S) Cloudflare Tunnel ile CANLI (modem gereksiz), P2P 4003 tünelden
   geçmez (mesh için modem yönlendirme ayrıca gerekir). Dış prova: curl 200,

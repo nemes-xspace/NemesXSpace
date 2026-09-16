@@ -62,7 +62,7 @@ Anahtar yollar:
   Test loglari: /home/d3str0y1ng/nemes-merge/{merge,verify,arsiv,faiss_cc100}.log
 ```
 
-## 4. SON 8 COMMIT (alt-usta eski→yeni)
+## 4. SON COMMITLER (yeniler üstte; tam liste `git log` ile)
 
 ```
 a02d493 hafiza (bu dosya+betik+garanti-8, PUSH BEKLIYOR) |
@@ -182,7 +182,8 @@ B-4 salt ✅ | B-5 hash pini ✅ | BUG-2 retry ✅ | parse resume ✅ |
 STRICT_DENETIM env ✅ | localhost bind ✅ | miner UA ✅ | E2E provası ✅.
 AÇIK: öz-denetim warn-only (STRICT=1 mainnet öncesi) | site 0.99 vs kod 0.98
 (site düzeltilecek) | miner-api sabit JWT (dondurulmuş kodda, canlıda değil) |
-miner token ps-görünürlüğü | TUI mock (site iddiasıyla çelişmemeli).
+TUI mock (site iddiasıyla çelişmemeli) | MASTER_PUBKEY default gömülü (env ile
+ezilmiyor; testnet toleransı, mainnet öncesi env zorunlu yapılacak).
 
 ### 10.7 Servis envanteri (tam, 16 Eyl süpürme)
 beyin-sunucu (llama başlatıcı) | beyin_bekci (15sn) + KillMode drop-in |
@@ -229,7 +230,37 @@ beyin.py + ingest_paket×9 | komuta_api.py.donduruldu mevcut.
 5. Secret'lar ps/env/log'da aranır, dosyaya yazılmaz.
 6. Ölü kod/script (izle*.sh, dondurulmuş API) envanterde "ölü" işaretlenir.
 7. Tatbikat her büyük hafıza değişiminde tekrarlanır.
-B-1 escrow ✅canlı | BUG-1 index ✅canlı | B-3 legacy ✅kalktı |
-B-4 spot salt ⏳ | B-5 llama.rs hash yok ⏳ | BUG-2 miner retry yok ⏳ |
-parse-merge yıkıcı ⏳ | öz-denetim warn-only ⏳ | site 0.99/0.98 + %10 uyumsuzluğu:
-kod doğru (%10, 0.98), site düzeltilecek.
+
+## 12. PARANOYAK PROTOKOLÜ (16 Eyl — Garanti-9)
+
+> Kural: Söylenmeden bakılır. Her oturumda §12.1, her hafta §12.2.
+> Bulgu = kanıt + kayıt + (gerekirse) tek komutluk onaya hazır çözüm.
+
+### 12.1 Oturum başı (5 dk, `durum-anlik.sh` + şunlar)
+- `systemctl --failed` → izleme dahil her failed birimi açıkla.
+- `ps` secret taraması (`--token HEX`, `ghp_`, `.pem` yolları) — boolean, içerik basılmaz.
+- Disk trendi: bir önceki snapshot'la karşılaştır, saatte >5G erime = alarm.
+- Timer'lar: `list-timers` kaçırılmış tetik var mı?
+- Canlı DB yazılabilirlik + cursor/escrow sayıları (kilitliyse busy-timeoutla tekrar).
+
+### 12.2 Haftalık derin (30 dk)
+- Yedek GERİ YÜKLEME provası (kopyaya restore + integrity + tablo sayımı).
+- Cert bitişleri (`openssl`, <30 gün = alarm).
+- Repo leak taraması (ghp/AKIA/PEM — node_modules hariç tutulup elle bakılır).
+- UFW kuralları + dinleyen portlar diff'i (beklenmeyen port = alarm).
+- FAISS/DB/symlink mevcudiyeti + bir spot sorgu.
+- Log anomalisi: son 24s error/critical + bekçi rolling boşluğu + izleme ALARM.log.
+
+### 12.3 A-demeden-B listesi (otomatik eşikler)
+- / <40G → cargo clean + yedek rotasyonu öner (tek komut).
+- /srv <100G → büyük iş (merge/FAISS) ONAYSIZ başlamaz.
+- Backup >26saat eski → timer kontrolü.
+- Kanarya sayısı değiştiyse → GUVENLIK sahibine sor.
+- Yeni failed unit → sebebini bulmadan kapatma.
+- `izleme.py` eşikleri (DISK 25/BEYIN 60/üretim 30dk/kuyruk 500/emanet 24sa) yılda 2 kez gözden geçir.
+
+### 12.4 Hijyen kuralları
+- Token/secret: dosyaya ASLA, ps/journal'a ASLA (env-file + 600), sohbette tek kullanımlık.
+- Yıkıcı işlem öncesi: sayım + kopya + geri dönüş yolu yazılı.
+- Config değişimi: önce `cat`, sonra drop-in, sonra reload+doğrula.
+- Tatbikat: her büyük hafıza değişiminde sıfır-bağlam testi.
