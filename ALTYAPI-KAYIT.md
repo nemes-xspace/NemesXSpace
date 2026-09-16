@@ -110,6 +110,10 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-16: **Windows ilk çalıştırma hatası + düzeltme.** `win-start.bat`
+  Downloads'a gidiyordu, dosyalar USB/Masaüstündeydi → `%~dp0` (bat'ın kendi
+  dizini) düzeltmesi. Dağıtım: mini-CD (sanal cdrom, düzeltilmiş bat + spice
+  installer). Ders: bat'lar konum-bağımsız yazılır.
 - 2026-09-16: **Windows VM dosya köprüsü (USB passthrough).** Flash'a NEMES/
   klasörü (exe+bat+token+kurulum+spice-guest-tools) yazılıp cihaza canlı takıldı
   (hotplug). Sıradaki: spice kurulumu (pano açılır) + win-start.bat ilk kanıtı.
