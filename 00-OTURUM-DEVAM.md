@@ -19,6 +19,7 @@
 | Testler | miner-core 12/12 + komuta-rs 8/8 (`1f39e1e`; escrow serbest/yanma dahil) |
 | Güvenlik | Komuta HTTP localhost-only (`d247ab8`, BIND_ADDR); P2P 4003 açık |
 | Sıra | Timer kalıbı (`beyin_sira.timer` 5dk + flock; `e5cfdb9`) |
+| Tohum-0 | HTTP(S) tunnel ile CANLI ✅; eksik: CF WAF-skip (/api/*, sende) + 4003 modem (mesh için) |
 | Yol haritası | v1.2 ayrı dosyada (`Belgeler/`, 1.1 sabitleri düzeltildi) |
 | Taslaklar | Kurucu-anahtar + GDPR + Tohum-0 + Site-yama (`docs/`, onay bekliyor) |
 | cc100_tr | KAPANDI ✅ 109.271.443 vektör, merge 118G, FAISS-24 (4.1G+834M, ntotal doğrulandı) |
