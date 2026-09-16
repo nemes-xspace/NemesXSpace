@@ -110,6 +110,12 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-16: **Dalga A başladı: caselaw hattı + binary paketi.** wiki_caselaw
+  454 madde embed+merge (0.2dk) + FAISS nlist32 (883K, 454 nokta 512 kümeye
+  sığmadı). Kopya DB'de dağıtım provası: kayıt→20'lik görev→kanıt kabul.
+  Canlıya dokunulmadı. Paket `nemes-merge/paket/nemes-miner-v0.2.0-linux.zip`
+  (5.4M, SHA256'lı, --help doğrulandı) — siteye yükleme ONAYI bekliyor.
+  SIRADAKİ: canlı corpus kesimi (GOREV_CORPUS) onayı.
 - 2026-09-16: **Paranoyak tur-1 (Garanti-9 kuruldu).** Bulgular: izleme servisi
   ölü bulundu (bayat beklentiler) → düzeltildi (0 alarm); miner token'ları
   ps'te çıplak bulundu → env-file'a alındı (drop-in, 0 eşleşme doğrulandı);
