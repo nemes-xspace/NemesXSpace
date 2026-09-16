@@ -60,6 +60,9 @@ pub fn anahtar_yukle_veya_uret(yol: &Path) -> anyhow::Result<SigningKey> {
             .map_err(|_| anyhow::anyhow!("anahtar dosyasi 32 bayt olmali: {}", yol.display()))?;
         return Ok(SigningKey::from_bytes(&arr));
     }
+    // Windows'ta Unix izin biti yok; dosya ACL ile korunur (kullanici dizini).
+    // Paranoyak not: paylasimli makinede anahtar dizinini elle kilitleyin.
+    #[cfg(unix)]
     use std::os::unix::fs::OpenOptionsExt;
     if let Some(parent) = yol.parent() {
         std::fs::create_dir_all(parent)?;
@@ -69,7 +72,9 @@ pub fn anahtar_yukle_veya_uret(yol: &Path) -> anyhow::Result<SigningKey> {
     getrandom::getrandom(&mut tohum)?;
     let sk = SigningKey::from_bytes(&tohum);
     let mut opt = std::fs::OpenOptions::new();
-    opt.write(true).create_new(true).mode(0o600);
+    opt.write(true).create_new(true);
+    #[cfg(unix)]
+    opt.mode(0o600);
     use std::io::Write;
     let mut f = opt.open(yol)?;
     writeln!(f, "{}", hex::encode(tohum))?;
