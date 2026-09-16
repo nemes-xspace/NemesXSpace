@@ -110,6 +110,9 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-16: **CF WAF-skip CANLI (operatör kurdu, doğrulandı).** Çıplak UA
+  (`WAF-Probe/1.0`) ile dış kayıt 200 döndü; prova satırı silindi. Dış miner
+  kapısı resmen açık → tohum-0 0.3 kapanışa bir adım (kalan: gerçek dış makine).
 - 2026-09-16: **Operatör kiti v1 taslağı** (`docs/`, onay bekliyor) + bitiş
   analizi (`docs/BITIS-ANALIZI.md`: teknik %70+, darboğaz operatör/hukuk/ekonomi).
 - 2026-09-16: **Corpus kesimi newscrawl_tr (56.5M madde).** caselaw 454/454
