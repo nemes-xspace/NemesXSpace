@@ -110,6 +110,10 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-16: **VM dosya köprüsü v2 (USB-disk).** İlk deneme virtio veriyoluna
+  takıldı (Windows sürücüsüz görmedi), SATA hotplug chipset'te yok → ISO USB
+  disk olarak canlı takıldı. Ders: KVM'ye takılan her aygıtın Windows sürücüsü
+  doğrulanır (virtio-drop, SATA-reboot, USB-canlı).
 - 2026-09-16: **Windows ilk çalıştırma hatası + düzeltme.** `win-start.bat`
   Downloads'a gidiyordu, dosyalar USB/Masaüstündeydi → `%~dp0` (bat'ın kendi
   dizini) düzeltmesi. Dağıtım: mini-CD (sanal cdrom, düzeltilmiş bat + spice
