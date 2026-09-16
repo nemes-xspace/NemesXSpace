@@ -110,6 +110,9 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-16: **Windows VM dosya köprüsü (USB passthrough).** Flash'a NEMES/
+  klasörü (exe+bat+token+kurulum+spice-guest-tools) yazılıp cihaza canlı takıldı
+  (hotplug). Sıradaki: spice kurulumu (pano açılır) + win-start.bat ilk kanıtı.
 - 2026-09-16: **Windows VM kuruldu (win10-test).** Flash'taki 2019 Win10
   kurulumundan xorriso ile 6.6G önyüklenebilir ISO üretildi, KVM: 8G/4CPU/60G
   qcow2, SATA+e1000 (virtio sürücüsüz kurulum), NAT. `nemes-miner.exe` (28M)
