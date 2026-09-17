@@ -877,6 +877,38 @@ async fn heartbeat(
     })))
 }
 
+/// Kira girisi (B20): madenci aralik kiralar, ~100 batch sormadan calisir.
+/// Kapilar tekil yolla ayni (kara + strike). Bos aralik -> 204 (madenci eski
+/// yola duser). Yanit: alt-gorev listesi (her biri bagimsiz batch).
+async fn kira_al(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(istek): Json<KiraIstek>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let miner_id = token_dogrula(&headers, &state.pool).await?;
+
+    let kara: Option<String> = sqlx::query_scalar("SELECT neden FROM kara_liste WHERE miner_id = ?")
+        .bind(&miner_id).fetch_optional(&state.pool).await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    if let Some(neden) = kara {
+        return Err((StatusCode::FORBIDDEN, format!("kara liste ({})", neden)));
+    }
+
+    let strike: i64 = sqlx::query_scalar("SELECT strike FROM miners WHERE miner_id = ?")
+        .bind(&miner_id)
+        .fetch_one(&state.pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    if strike >= STRIKE_LIMIT {
+        return Err((StatusCode::FORBIDDEN, "3 strike - gorev akisi kesildi".to_string()));
+    }
+
+    let adet = istek.adet.unwrap_or(KIRA_VARSAYILAN);
+    let liste = kira_kur(&state, &miner_id, adet).await?;
+    // Bos liste = aralik yok -> madenci eski yola duser (HTTP 200 + bos dizi).
+    Ok(Json(serde_json::json!({ "gorevler": liste })))
+}
+
 async fn gorev(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -1035,6 +1067,217 @@ async fn gorev(
 
     let g = gorev_kaydet(&state, &miner_id, offset, metinler, madde_idler, "dagitildi").await?;
     Ok(Json(g).into_response())
+}
+
+/// Kira sinirlari (B20 olcek): tek cagrida en fazla madde.
+const KIRA_EN_FAZLA: i64 = 20000;
+const KIRA_VARSAYILAN: i64 = 2000;
+
+#[derive(Deserialize)]
+struct KiraIstek {
+    adet: Option<i64>,
+}
+
+/// Kira ile aralik kur (B20): TEK kilit, TEK wiki okuma, toplu kayitlar.
+/// `/api/gorev` tekil yoluna DOKUNULMAZ. Kira = N alt-gorev (20'lik dilimler);
+/// madenci kirayi bir kez alir, ~100 batch gorev sormadan calisir.
+/// Bitmeyen araliklar supurme ile dolar (mevcut mekanizma, yeni kod yok).
+async fn kira_kur(
+    state: &Arc<AppState>,
+    miner_id: &str,
+    adet_istek: i64,
+) -> Result<Vec<GorevResp>, (StatusCode, String)> {
+    let adet = adet_istek.clamp(TASK_BATCH, KIRA_EN_FAZLA);
+    let _kilit = kilit_al(&state.dagitim_kilidi).await;
+    let now_ts = current_epoch();
+
+    let row = sqlx::query("SELECT son_id FROM gorev_cursor WHERE corpus = ?")
+        .bind(&state.corpus)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let son_id: i64 = row.map(|r| r.get("son_id")).unwrap_or(0);
+
+    // Cursor arkasinda kalan claim'leri kapat (tekil yolla ayni).
+    sqlx::query("UPDATE shard_ilanlari SET durum = 'tukendi' WHERE corpus = ? AND durum = 'aktif' AND bitis <= ?")
+        .bind(&state.corpus)
+        .bind(son_id)
+        .execute(&state.pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+
+    // Baskasinin aktif + taze claim'inin ustunden ATLA (tekil yolla ayni).
+    let mut start = son_id;
+    for _ in 0..8 {
+        let hit = sqlx::query(
+            "SELECT baslangic, bitis FROM shard_ilanlari WHERE corpus = ? AND durum = 'aktif' AND ts > ? AND miner_id != ? AND baslangic <= ? AND ? <= bitis ORDER BY baslangic LIMIT 1"
+        )
+        .bind(&state.corpus)
+        .bind(now_ts - SHARD_SURE_SN)
+        .bind(&miner_id)
+        .bind(start + 1)
+        .bind(start + 1)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        match hit {
+            Some(h) => {
+                let e: i64 = h.get("bitis");
+                start = e;
+            }
+            None => break,
+        }
+    }
+
+    // TEK wiki aralik okuma (state.wiki havuzundan; cagri basi baglanti yok).
+    // Uretimde wiki_{corpus}.db (salt-okunur), testte :memory: (tohumlanir).
+    let rows = sqlx::query("SELECT id, ozet FROM madde WHERE id > ? AND length(ozet) > 20 ORDER BY id LIMIT ?")
+        .bind(start)
+        .bind(adet)
+        .fetch_all(&state.wiki)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    if rows.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    let kira_id = format!("kira:{}:{}", now_ts, &Uuid::new_v4().simple().to_string()[..12]);
+    // Kira sirri: kor ID'ler blake3(sir+dilim+sira)'dan turetilir (tahmin
+    // edilemez; tek toplu cakisma kontrolu yeterli — tekil yoldaki RNG+SELECT
+    // dongusu yerine gecer).
+    let mut sir = [0u8; 32];
+    rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut sir);
+    let kor_uret = |dilim_no: i64, i: u64| -> i64 {
+        let mut h = blake3::Hasher::new();
+        h.update(&sir);
+        h.update(&dilim_no.to_le_bytes());
+        h.update(&i.to_le_bytes());
+        (u64::from_le_bytes(h.finalize().as_bytes()[..8].try_into().unwrap_or([0; 8])) >> 1) as i64
+    };
+    let mut tum_kor: Vec<(i64, i64, String)> = Vec::new(); // (kor, madde, gid)
+    let mut tum_madde: Vec<i64> = Vec::new();
+    let mut sonuclar: Vec<GorevResp> = Vec::new();
+    let mut dilim_no = 0i64;
+    for dilim in rows.chunks(TASK_BATCH as usize) {
+        let madde_idler: Vec<i64> = dilim.iter().map(|r| r.get("id")).collect();
+        let mut metinler: Vec<String> = dilim.iter().map(|r| r.get::<String, _>("ozet").chars().take(4500).collect()).collect();
+        let offset = madde_idler[0];
+        let gid = format!("{}:{}:{}:k{}-{}", state.corpus, offset, madde_idler.len(), kira_id, dilim_no);
+        // KANARYA (tekil yolla ayni, %4): sentetik cumle + negatif isaret.
+        let mut kanarya_kid = 0i64;
+        {
+            let roll: f64 = rand::thread_rng().gen_range(0.0..1.0);
+            if roll < 0.04 {
+                if let Ok(krow) = sqlx::query("SELECT id, metin FROM kanaryalar WHERE aktif = 1 ORDER BY RANDOM() LIMIT 1")
+                    .fetch_optional(&state.pool).await
+                {
+                    if let Some(k) = krow {
+                        let kid: i64 = k.get("id");
+                        let kmetin: String = k.get("metin");
+                        metinler.push(kmetin);
+                        kanarya_kid = kid;
+                        let _ = sqlx::query("INSERT INTO kanarya_dagitim (kanarya_id, gorev_id, miner_id, ts) VALUES (?, ?, ?, ?)")
+                            .bind(kid).bind(&gid).bind(miner_id).bind(now_ts)
+                            .execute(&state.pool).await;
+                    }
+                }
+            }
+        }
+        // Kor listesi (tekil yolun madde_idler'i = kor_idler): gercekler + kanarya.
+        let mut kors: Vec<i64> = Vec::with_capacity(metinler.len());
+        for (i, m) in madde_idler.iter().enumerate() {
+            let kor = kor_uret(dilim_no, i as u64);
+            kors.push(kor);
+            tum_kor.push((kor, *m, gid.clone()));
+        }
+        if kanarya_kid != 0 {
+            let kor = kor_uret(dilim_no, madde_idler.len() as u64);
+            kors.push(kor);
+            tum_kor.push((kor, -kanarya_kid, gid.clone()));
+        }
+        sqlx::query(
+            "INSERT OR IGNORE INTO gorevler (gorev_id, dagitilan_miner, corpus, offset, beklenen, alinan, durum, odul_mikro, ts) VALUES (?, ?, ?, ?, ?, 0, 'acik', 0, ?)"
+        )
+        .bind(&gid)
+        .bind(miner_id)
+        .bind(&state.corpus)
+        .bind(offset)
+        .bind(metinler.len() as i64)
+        .bind(now_ts)
+        .execute(&state.pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        tum_madde.extend(madde_idler.iter());
+        sonuclar.push(GorevResp {
+            id: gid,
+            tip: "embed".to_string(),
+            corpus: corpus_kodu(&state.corpus),
+            shard: 0,
+            offset,
+            limit: metinler.len() as i64,
+            deadline: now_ts + TASK_DEADLINE_SEC,
+            payload: GorevPayload { metinler, madde_idler: kors, denetim: None, yedek: None },
+        });
+        dilim_no += 1;
+    }
+    // TEK toplu cakisma kontrolu (63-bit alanda carpisma pratikte imkansiz).
+    if !tum_kor.is_empty() {
+        let yerler = tum_kor.iter().map(|_| "?").collect::<Vec<_>>().join(",");
+        let q = format!("SELECT kor_id FROM kor_esleme WHERE kor_id IN ({})", yerler);
+        let mut qq = sqlx::query_scalar::<_, i64>(&q);
+        for (k, _, _) in &tum_kor {
+            qq = qq.bind(k);
+        }
+        let carpisan: Vec<i64> = qq.fetch_all(&state.pool).await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        if !carpisan.is_empty() {
+            return Err((StatusCode::CONFLICT, "kor cakismasi (tekrar deneyin)".to_string()));
+        }
+        // TEK toplu kor eslemesi.
+        let degerler = tum_kor.iter().map(|_| "(?, ?, ?, ?)").collect::<Vec<_>>().join(",");
+        let qi = format!("INSERT OR IGNORE INTO kor_esleme (kor_id, madde_id, gorev_id, ts) VALUES {}", degerler);
+        let mut qqi = sqlx::query(&qi);
+        for (k, m, g) in &tum_kor {
+            qqi = qqi.bind(k).bind(m).bind(g).bind(now_ts);
+        }
+        qqi.execute(&state.pool).await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        // TEK toplu dagitim izi (500'luk parcalar; SQLite degisken siniri icin).
+        for chunk in tum_madde.chunks(500) {
+            let qd = format!("INSERT INTO dagitilan_madde (madde_id, ts) VALUES {} ON CONFLICT(madde_id) DO UPDATE SET ts = excluded.ts",
+                chunk.iter().map(|_| "(?, ?)").collect::<Vec<_>>().join(","));
+            let mut qdq = sqlx::query(&qd);
+            for m in chunk {
+                qdq = qdq.bind(m).bind(now_ts);
+            }
+            qdq.execute(&state.pool).await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        }
+    }
+    // Cursor tek yazma (monoton).
+    if let Some(son) = tum_madde.iter().max() {
+        let ileri = (*son).max(son_id);
+        sqlx::query(
+            "INSERT INTO gorev_cursor (corpus, son_id) VALUES (?, ?) ON CONFLICT(corpus) DO UPDATE SET son_id = excluded.son_id"
+        )
+        .bind(&state.corpus)
+        .bind(ileri)
+        .execute(&state.pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    }
+    // TEK duyuru (100 yerine 1 gossip).
+    if !sonuclar.is_empty() {
+        let ilk = &sonuclar[0];
+        let duyuru = serde_json::json!({"kira_id": kira_id, "gorev_id": ilk.id, "corpus": corpus_kodu(&state.corpus), "madde": tum_madde.len(), "ts": now_ts});
+        if let Ok(raw) = serde_json::to_vec(&duyuru) {
+            if let Some(tx) = state.gorev_yayin_tx.as_ref() {
+                let _ = tx.send((GOREV_TOPIC.to_string(), raw));
+            }
+        }
+        info!("kira kuruldu: {} ({} alt-gorev, {} madde) -> {}", kira_id, sonuclar.len(), tum_madde.len(), miner_id);
+    }
+    Ok(sonuclar)
 }
 
 /// Embed gorevi kur + batch takibine isle. Donen GorevResp dogrudan JSON'lanir.
@@ -2836,6 +3079,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/kayit", post(register))
         .route("/api/heartbeat", post(heartbeat))
         .route("/api/gorev", get(gorev))
+        .route("/api/kira/al", post(kira_al))
         .route("/api/kanit", post(kanit))
         .route("/api/kanit/toplu", post(kanit_toplu))
         .route("/api/status", get(status))
@@ -3359,6 +3603,69 @@ mod tests {
         // Bayrak yoksa None.
         sqlx::query("UPDATE kanitlar SET spot_check = 0 WHERE gorev_id = 'test:4'").execute(&state.pool).await.unwrap();
         assert!(mesh_duyuru_kur(&state, "test:4", 42, 9999999999).await.unwrap().is_none());
+    }
+
+    #[tokio::test]
+    async fn test_kira_yasam_dongusu() {
+        // B20: kira ile 40 madde (2 alt-gorev); ilk alt-gorev kapanir, odul korunur.
+        let state = test_state().await;
+        sqlx::query("INSERT INTO miners (miner_id, token, cuzdan, makine_id, created_at, last_seen) VALUES ('m1', 't1', 'c', 'mk', 1, 9999999999)")
+            .execute(&state.pool).await.unwrap();
+        sqlx::query("CREATE TABLE madde (id INTEGER PRIMARY KEY, ozet TEXT)").execute(&state.wiki).await.unwrap();
+        for i in 1..=40i64 {
+            sqlx::query("INSERT INTO madde (id, ozet) VALUES (?, ?)")
+                .bind(i)
+                .bind(format!("kira test maddesi {} sufficiently long text for length filter", i))
+                .execute(&state.wiki).await.unwrap();
+        }
+        let resp = kira_al(State(state.clone()), test_headers("t1"), Json(KiraIstek { adet: Some(40) }))
+            .await
+            .unwrap()
+            .0;
+        let gorevler = resp.get("gorevler").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(gorevler.len(), 2, "40 madde = 2 alt-gorev");
+        // Cursor tek yazimla 40'a dayanmali.
+        let cursor: i64 = sqlx::query_scalar("SELECT son_id FROM gorev_cursor WHERE corpus = 'test'")
+            .fetch_one(&state.pool).await.unwrap();
+        assert_eq!(cursor, 40);
+        // Kor eslemesi 40 satir (dagitim korlari).
+        let kor_say: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM kor_esleme")
+            .fetch_one(&state.pool).await.unwrap();
+        assert_eq!(kor_say, 40);
+        // Ilk alt-gorevin 20 kaniti (kor ID'ler payload'dan) -> kapanis.
+        let ilk = &gorevler[0];
+        let gid = ilk.get("id").and_then(|v| v.as_str()).unwrap();
+        let korlar: Vec<i64> = ilk.get("payload").and_then(|p| p.get("madde_idler"))
+            .and_then(|v| v.as_array()).unwrap()
+            .iter().filter_map(|v| v.as_i64()).collect();
+        assert_eq!(korlar.len(), 20);
+        let vb = test_vektor(7);
+        let mut son = None;
+        for k in &korlar {
+            let r = kanit(
+                State(state.clone()),
+                test_headers("t1"),
+                Json(KanitReq { gorev_id: gid.to_string(), madde_id: *k, v_int8_b64: vb.clone(), v_min: 0.0, v_max: 1.0, imza: None }),
+            ).await.unwrap().0;
+            son = Some(r);
+        }
+        let son = son.unwrap();
+        assert!(son.kabul && son.batch_tamam, "kira alt-gorevi kapanmali");
+        let odenen: i64 = sqlx::query_scalar("SELECT COALESCE(SUM(coin_mikro),0) FROM miners")
+            .fetch_one(&state.pool).await.unwrap();
+        let emanet: i64 = sqlx::query_scalar("SELECT COALESCE(SUM(miktar_mikro),0) FROM escrow")
+            .fetch_one(&state.pool).await.unwrap();
+        assert_eq!(odenen + emanet, 2000, "kira odulu korunmali");
+        // Bos wiki -> bos liste (madenci eski yola duser).
+        let state2 = test_state().await;
+        sqlx::query("INSERT INTO miners (miner_id, token, cuzdan, makine_id, created_at, last_seen) VALUES ('m1', 't1', 'c', 'mk', 1, 9999999999)")
+            .execute(&state2.pool).await.unwrap();
+        sqlx::query("CREATE TABLE madde (id INTEGER PRIMARY KEY, ozet TEXT)").execute(&state2.wiki).await.unwrap();
+        let resp2 = kira_al(State(state2.clone()), test_headers("t1"), Json(KiraIstek { adet: Some(40) }))
+            .await
+            .unwrap()
+            .0;
+        assert!(resp2.get("gorevler").and_then(|v| v.as_array()).unwrap().is_empty());
     }
 
     #[tokio::test]

@@ -180,6 +180,10 @@ pub struct GorevAlici {
     pub base_url: String,
     pub token: String,
     client: reqwest::Client,
+    /// B20 kira kipi: aciksa gorevler toplu kiralanir, kuyruktan dagitilir.
+    kira_acik: bool,
+    kira_adet: i64,
+    kira_kuyruk: std::sync::Arc<tokio::sync::Mutex<std::collections::VecDeque<Gorev>>>,
 }
 
 impl GorevAlici {
@@ -190,11 +194,29 @@ impl GorevAlici {
             .timeout(std::time::Duration::from_secs(30))
             .build()
             .expect("reqwest client");
-        Self { base_url, token: token.into(), client }
+        Self { base_url, token: token.into(), client, kira_acik: false, kira_adet: 2000, kira_kuyruk: std::sync::Arc::new(tokio::sync::Mutex::new(std::collections::VecDeque::new())) }
+    }
+
+    /// B20 kira kipini ac (varsayilan kapali; kapaliyken davranis aynen eski).
+    pub fn kira_ayarla(&mut self, acik: bool, adet: i64) {
+        self.kira_acik = acik;
+        self.kira_adet = adet.clamp(20, 20000);
     }
 
     /// Sıradaki görevi al
     pub async fn gorev_al(&self) -> anyhow::Result<Option<Gorev>> {
+        // B20 kira kipi: kuyrukta hazir alt-gorev varsa HTTP'siz ver.
+        // Kuyruk bosalsa kira tazele; olmadi/404/bos ise eski tekil yola dus.
+        if self.kira_acik {
+            if let Some(g) = self.kira_kuyruk.lock().await.pop_front() {
+                return Ok(Some(g));
+            }
+            if self.kira_doldur().await {
+                if let Some(g) = self.kira_kuyruk.lock().await.pop_front() {
+                    return Ok(Some(g));
+                }
+            }
+        }
         let url = format!("{}/api/gorev", self.base_url.trim_end_matches('/'));
         let resp = self.client
             .get(&url)
@@ -217,6 +239,54 @@ impl GorevAlici {
 
         let gorev: Gorev = resp.json().await?;
         Ok(Some(gorev))
+    }
+
+    /// B20 kira tazele: POST /api/kira/al; alt-gorevleri kuyruga dizer.
+    /// Donen: kuyruga eklenen oldu mu? Hata/404/bos -> false (eski yola dusulur).
+    async fn kira_doldur(&self) -> bool {
+        let url = format!("{}/api/kira/al", self.base_url.trim_end_matches('/'));
+        let body = serde_json::json!({ "adet": self.kira_adet });
+        let resp = match self.client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", self.token))
+            .json(&body)
+            .send()
+            .await
+        {
+            Ok(r) => r,
+            Err(e) => {
+                eprintln!("kira hatasi (eski yola dusuluyor): {}", e);
+                return false;
+            }
+        };
+        if resp.status() == reqwest::StatusCode::NOT_FOUND {
+            // Eski komuta: kira yok, sessizce eski yol (bir kez uyar).
+            eprintln!("kira ucu yok (eski komuta?) - tekil yola dusuldu");
+            return false;
+        }
+        if !resp.status().is_success() {
+            return false;
+        }
+        let v: serde_json::Value = match resp.json().await {
+            Ok(x) => x,
+            Err(_) => return false,
+        };
+        let liste: Vec<Gorev> = v
+            .get("gorevler")
+            .and_then(|g| g.as_array())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|x| serde_json::from_value(x.clone()).ok())
+                    .collect()
+            })
+            .unwrap_or_default();
+        if liste.is_empty() {
+            return false;
+        }
+        let n = liste.len();
+        self.kira_kuyruk.lock().await.extend(liste);
+        eprintln!("kira alindi: {} alt-gorev kuyrukta", n);
+        true
     }
 }
 

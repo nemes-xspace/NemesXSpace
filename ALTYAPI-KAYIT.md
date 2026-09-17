@@ -110,6 +110,14 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-17: **Claim-kirası canlı (B20).** `POST /api/kira/al`: tek kilit +
+  tek wiki okuma + toplu kayitlarla N alt-gorev (blake3 kor, tek duyuru).
+  Miner `--kira` ile kuyruktan calisir, bitince tazeler; dususte eski yol.
+  Olcum (unit-a kirada, b/win eski yolda): dagitim 1091->176/10dk, kilit
+  seyreklesmesi, verim korunuyor (14.4 kanit/sn), 0 kira hatasi (2 hata eski
+  restart araligindan). Binary'ler `.20260917-kira.bak`'ta. Test 14/14.
+  NOT: unit-a=523d3c47, unit-b=a41b0d81 (tokenlar ilk gunden capraz; zararsiz,
+  etiket karisikligi olmasin).
 - 2026-09-17: **Gömme demeti diriltildi (B19, S4 önkoşulu).** Kök nedenler:
   (1) demet "self-contained" DEĞİLDİ — 3 .so LMStudio'ya symlinkliydi;
   (2) Eyl-4 stub + LMStudio 2.28.2 impl karışımı ABI segfault veriyordu

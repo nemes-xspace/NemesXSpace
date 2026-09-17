@@ -80,6 +80,13 @@ enum Commands {
         /// Bos = yalnizca LAN kesfi. --p2p-dinle gerektirir.
         #[arg(long, default_value = "")]
         bootstrap: String,
+        /// Kira kipi (B20): araligi bir kez kirala, ~100 batch sormadan calis.
+        /// Kapaliyken gorev basina tekil HTTP aynen calisir.
+        #[arg(long, default_value_t = false)]
+        kira: bool,
+        /// Kira adedi (madde sayisi, 20-20000).
+        #[arg(long, default_value_t = 2000)]
+        kira_adet: i64,
         /// Depolama dizini (taahhut + parcalar). Bos ise ~/.nemes/depolama;
         /// taahhut yoksa heartbeat parcasiz gider (compute-only).
         #[arg(long, default_value = "")]
@@ -148,10 +155,10 @@ async fn main() -> anyhow::Result<()> {
                 println!("KATMAN: storage (komuta C5 sonrasi bu taahhutu isteyecek)");
             }
         }
-        Some(Commands::Mine { gpu, simple, komuta, token, embed_api, model, corpus, anahtar, shard_adet, p2p_port, p2p_dinle, denetim_mesh, bootstrap, depolama }) => {
+        Some(Commands::Mine { gpu, simple, komuta, token, embed_api, model, corpus, anahtar, shard_adet, p2p_port, p2p_dinle, denetim_mesh, bootstrap, kira, kira_adet, depolama }) => {
             let token = token_coz(&token)?;
             if simple {
-                simple_mine(&gpu, &komuta, &token, &embed_api, &model, &corpus, &anahtar, shard_adet, p2p_port, p2p_dinle, denetim_mesh, &bootstrap, &depolama).await?;
+                simple_mine(&gpu, &komuta, &token, &embed_api, &model, &corpus, &anahtar, shard_adet, p2p_port, p2p_dinle, denetim_mesh, &bootstrap, kira, kira_adet, &depolama).await?;
             } else {
                 full_tui_mine(&gpu, &komuta).await?;
             }
@@ -226,7 +233,7 @@ async fn miner_id_ogren(komuta: &str, token: &str) -> anyhow::Result<String> {
 }
 
 // ——— Basit log (xmrig klasik) — GERCEK IS: gorev al -> embed -> kanit ---
-async fn simple_mine(_gpu: &str, komuta: &str, token: &str, embed_api: &str, model: &str, corpus: &str, anahtar: &str, shard_adet: i64, p2p_port: u16, p2p_dinle: bool, denetim_mesh: bool, bootstrap: &str, depolama: &str) -> anyhow::Result<()> {
+async fn simple_mine(_gpu: &str, komuta: &str, token: &str, embed_api: &str, model: &str, corpus: &str, anahtar: &str, shard_adet: i64, p2p_port: u16, p2p_dinle: bool, denetim_mesh: bool, bootstrap: &str, kira: bool, kira_adet: i64, depolama: &str) -> anyhow::Result<()> {
     use miner_core::{mining_loop, EmbedClient, GorevAlici, KanitGonderici};
     use miner_core::{anahtar_yolu, anahtar_yukle_veya_uret, ilan_imzala, simdi_ms, ShardRelay, SigningKey};
     use miner_core::depolama as dep;
@@ -293,7 +300,12 @@ async fn simple_mine(_gpu: &str, komuta: &str, token: &str, embed_api: &str, mod
     } else {
         None
     };
-    let gorev_alici = GorevAlici::new(komuta, token);
+    let mut gorev_alici = GorevAlici::new(komuta, token);
+    // B20 kira kipi: aciksa alt-gorevler kuyruktan gelir (tekil HTTP seyreklesir).
+    if kira {
+        gorev_alici.kira_ayarla(true, kira_adet);
+        println!("◈ kira kipi acik (adet {})", kira_adet.clamp(20, 20000));
+    }
     let embed_client = EmbedClient::new(embed_api, model);
     let kanit_gonderici = KanitGonderici::new(komuta, token);
     let (durum_tx, mut durum_rx) = tokio::sync::mpsc::channel(32);

@@ -103,7 +103,9 @@ b1b3770 GPU geri | 26def41 GPU 300W
 - B17. KAPANDI ✅ (17 Eyl): stres tablosu düzeltildi (100x hata + frenli 1M satırı + ölçülü altyapı tablosu).
 - B18. KAPANDI ✅ (17 Eyl): WAN keşif v1 — kad+DHT protokolü, sabit kimlikler (komuta PeerId tohum-0), tohum bayrakları, test ispatlı. S3 (4003 modem) WAN'ı açar.
 - B19. KAPANDI ✅ (17 Eyl): demet gerçekten bağımsız (1.3G, kosinüs 1.0 ispatlı). :1251 kapalı (emir), S4 paketi hazır.
-- B20. Claim-kirası protokolü (YENİ, P2): madenci aralığı bir kez kiralar, 100 batch gorev sormadan çalışır (dağıtıcı 23K/sn→230/sn). 460+ madencinin önkoşulu.
+- B20. KAPANDI ✅ (17 Eyl): kira canlı (unit-a kirada, dagitim 6x dustu, verim ayni). unit↔id capraz (a=523d3c47, b=a41b0d81).
+- B21. Teklif protokolü (YENİ, P2, tasarım): madenci öğrenme hedefi önerir (stake'li) → mesh yenilik/boşluk denetler → kabulde görevleşir. Kendi-kendine öğrenmenin kapısı.
+- B22. Uçta üretim döngüsü (YENİ, P3, Faz 2): GPU'lu madencide üret-tanıkla-damıt (öğretmen-küçük model, QLoRA), mesh mutabakatı. ERTELENEN damıtmanın mesh hali.
 - B11. Gece nöbeti (bu akşam): `gece-gozlem.sh` tekrar kurulsun mu — operatör onaylı varsayım, akşam sorulacak.
 
 ### SENDEN (operatör)
@@ -168,7 +170,14 @@ WAF-skip ✅ | push (17 commit) ✅ | **komuta OOM (artımlı havuz, 17 Eyl)** �
   kopyası yok): epoch imzalama + K1→K3 devri + imha/affet. Bu kilit değişmeden
   MERKEZİ BİLEŞEN EKLENEMEZ; kalan her merkezi nokta aşağıda mesh-hedefiyle
   kayıtlıdır (B18-B20). Paralel beyin = 1M makinenin gömme+denetim+depolama
-  yükünü aralarında taşımasıdır; komuta ölçü birimi değil, pusuladır. Model çıkarma/damıtma/HF işi
+  yükünü aralarında taşımasıdır; komuta ölçü birimi değil, pusuladır.
+- **KENDİ KENDİNE ÖĞRENME (17 Eyl akşam, operatör beyanı): hedef, merkezden
+  görev bekleyen ağ DEĞİL; görevi kendi alan-planlayan-yürüten, bilgiden
+  bilgi üreten tam otonom yapıdır.** Merkez 1M makineyi besleyemez — öğrenme
+  kararı da mesh'e taşınır: merak örneklemesi (bilgi boşluğu avı) → teklif
+  (stake'li) → çapraz doğrulama → bilgi. Kurucu otoritesi güven kökü olarak
+  kalır, veri yoluna girmez. Sıra: B20 (kira) → teklif protokolü → uçta üretim.
+- **Kapsam kilidi (16 Eyl): SADECE MADENCİLİK.** Model çıkarma/damıtma/HF işi
   ileri döneme ertelendi (1.4, 3.2). Odak: embed/kanıt/ödül/ağ. Bu kilit
   değişmeden `model/` dizinine ve model iddialarına (site Y2) dokunulmaz.
 - Canlı komuta DB'ye ALTER/DROP YOK; sadece CREATE TABLE / ADD COLUMN
