@@ -110,6 +110,12 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-17: **Gece nöbeti kuruldu (21:41) + kanarya emanet toplu tasfiye.**
+  Kalan 365 kanarya emaneti de serbest bırakıldı (34.697 mikro, 3 madenci;
+  kopya `/tmp/emanet-kanarya-tumu.sql`de, defter tozu sabit). Nöbet betiği
+  güncellendi (kuyruk + komuta RSS/swap + OOM sayacı sütunları). Taban 21:41:
+  win 417K kanıt (30.833'ü doğrulanmış-geçti, 0 kaldı), kuyruk 107K (eriyor),
+  komuta 1.2G RSS + 5.6G swap (takipte), OOM sayacı=24 (sabah artmamalı).
 - 2026-09-17: **Integration testleri (B3).** Router `app_router()`'a çıkarıldı;
   ephemeral-port iskelesiyle 3 HTTP turu: iskelet (health/404/auth), kira uçtan
   uca (kapanış+korunum), denetim turu (bayrak→görev→sonuç→doğrulama). Test

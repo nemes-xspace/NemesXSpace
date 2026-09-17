@@ -7,7 +7,7 @@
 
 ---
 
-## 1. SON SNAPSHOT — 17 Eyl 2026 14:05 (+03, date ile doğrulandı)
+## 1. SON SNAPSHOT — 17 Eyl 2026 21:45 (+03, date ile doğrulandı)
 
 | Kalem | Durum |
 |---|---|
@@ -106,7 +106,7 @@ b1b3770 GPU geri | 26def41 GPU 300W
 - B20. KAPANDI ✅ (17 Eyl): kira canlı (unit-a kirada, dagitim 6x dustu, verim ayni). unit↔id capraz (a=523d3c47, b=a41b0d81).
 - B21. KAPANDI ✅ (17 Eyl): teklif v1 canlı (migration 014 + 3 uç + öncelik + pay/iade + miner komutları, test 15/15). İlk gerçek teklif operatörde.
 - B22. KAPANDI ✅ (17 Eyl v1): mekanik ispat (Qwen3-0.6B :1258'de RAG→üretim 191tok/s) + tasarım dosyası. Kalite Instruct-ağırlık bekliyor (B22b).
-- B11. Gece nöbeti (bu akşam): `gece-gozlem.sh` tekrar kurulsun mu — operatör onaylı varsayım, akşam sorulacak.
+- B11. KAPANDI ✅ (17 Eyl 21:41): gece nöbeti devrede (18 tur, kuyruk+RSS+OOM sütunlu).
 
 ### SENDEN (operatör)
 - S0. Token revoke (YENİ, GÜVENLİK, P0): dünkü 2 token + bugünkü hâlâ açıksa hepsi revoke edilecek. opencode.db'de düz metin duruyorlar.
