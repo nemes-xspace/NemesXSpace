@@ -110,6 +110,13 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-17: **Toplu-kanıt girişi (B14).** `POST /api/kanit/toplu` (EK yol, cap 100):
+  gorev basina 20 HTTP yerine 1. Her kalem mevcut `kanit()` kodunu cagirir
+  (odul/emanet/kapanis birebir; kalem hatasi batch'i durdurmaz). Tekil yol aynen
+  duruyor (win .exe uyumlulugu). Miner toplu gonderir, 404'te tekliye duser.
+  Test: 12/12 + 12/12 (yeni `test_toplu_yasam_dongusu`: kapanis + odul korunumu +
+  cift-kayit reddi + bos/asiri reddi). Binary'ler `.20260917-toplu.bak`'ta,
+  komuta+miner-a/b deploy edildi, uretim saglikli (425 batch/5dk, 0 hata).
 - 2026-09-17: **Shard-claim disiplini (B13).** Tablo çürümüştü: 9 "aktif" ilanın
   8'i bayattı, hepsi donuk tr cursor'una (4724762) yığılmıştı; miner `--corpus tr`
   bayrağı mesh ilanlarını yanlış etiketliyordu (komuta newscrawl sunarken).

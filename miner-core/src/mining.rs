@@ -248,6 +248,38 @@ impl KanitGonderici {
         Ok(())
     }
 
+    /// Toplu kanit gonder (B14 olcek): bir gorevin kanitlari TEK HTTP istegiyle.
+    /// Donen: kabul edilen kalem sayisi. Eski komuta (404) -> tekli yola dusulur.
+    pub async fn kanit_toplu_gonder(&self, kanitlar: &[Kanit]) -> anyhow::Result<usize> {
+        let url = format!("{}/api/kanit/toplu", self.base_url.trim_end_matches('/'));
+        let resp = self.client
+            .post(&url)
+            .header("Authorization", format!("Bearer {}", self.token))
+            .json(kanitlar)
+            .send()
+            .await?;
+        if resp.status() == reqwest::StatusCode::NOT_FOUND {
+            // Eski komuta: tekli yola dus (win .exe karsisinda komuta hep yeni, tedbir).
+            let mut kabul = 0;
+            for k in kanitlar {
+                if self.kanit_gonder(k).await.is_ok() {
+                    kabul += 1;
+                }
+            }
+            return Ok(kabul);
+        }
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let err = resp.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("toplu kanit http {}: {}", status, err));
+        }
+        let v: serde_json::Value = resp.json().await?;
+        let kabul = v.get("sonuclar").and_then(|s| s.as_array()).map(|a| {
+            a.iter().filter(|s| s.get("kabul").and_then(|x| x.as_bool()) == Some(true)).count()
+        }).unwrap_or(0);
+        Ok(kabul)
+    }
+
     /// Parça indir (C7 onarım): relay'den ham baytlar. Boyut doğrulanmaz burada.
     pub async fn parca_indir(&self, hash: &str) -> anyhow::Result<Vec<u8>> {
         let url = format!("{}/api/parca/indir/{}", self.base_url.trim_end_matches('/'), hash.trim());
@@ -527,8 +559,10 @@ pub async fn mining_loop(
             }
             // Durum gonderimi icin asagidaki ortak bloga dus (kanit dongusunu atla)
         } else {
-        // Her vektör için kanıt gönder
-        for (i, (vektor, madde_id)) in vektorler.into_iter().zip(madde_idler.into_iter()).enumerate() {
+        // Her vektör için kanıt hazırla, TEK toplu istekle gönder (B14 olcek:
+        // gorev basina 20 HTTP yerine 1; komuta girisi rahatlar).
+        let mut toplu: Vec<Kanit> = Vec::new();
+        for (vektor, madde_id) in vektorler.into_iter().zip(madde_idler.into_iter()) {
             if vektor.is_empty() {
                 eprintln!("[worker-{}] boş vektör atlanıyor", worker_id);
                 continue;
@@ -536,30 +570,26 @@ pub async fn mining_loop(
 
             // int8 nicele
             let (v_int8, v_min, v_max) = crate::int8_nicele(&vektor);
-            let v_int8_b64 = B64_STANDARD.encode(&v_int8);
 
-            // Kanıt oluştur
-            let kanit = Kanit {
+            // Kanıt oluştur (imza Faz2'de Ed25519 eklenecek)
+            toplu.push(Kanit {
                 gorev_id: gorev.id.clone(),
                 madde_id,
-                v_int8_b64,
+                v_int8_b64: B64_STANDARD.encode(&v_int8),
                 v_min,
                 v_max,
-                imza: None, // Faz2'de Ed25519 eklenecek
-            };
-
-            // Kanıt gönder
-            if let Err(e) = kanit_gonderici.kanit_gonder(&Kanit {
-                gorev_id: gorev.id.clone(),
-                madde_id,
-                v_int8_b64: kanit.v_int8_b64.clone(),
-                v_min: kanit.v_min,
-                v_max: kanit.v_max,
                 imza: None,
-            }).await {
-                eprintln!("[worker-{}] kanıt gönderme hatası: {}", worker_id, e);
-            } else {
-                islenen += 1;
+            });
+        }
+        if !toplu.is_empty() {
+            match kanit_gonderici.kanit_toplu_gonder(&toplu).await {
+                Ok(kabul) => {
+                    if kabul < toplu.len() {
+                        eprintln!("[worker-{}] toplu kanit: {}/{} kabul", worker_id, kabul, toplu.len());
+                    }
+                    islenen += kabul as u64;
+                }
+                Err(e) => eprintln!("[worker-{}] toplu kanıt gönderme hatası ({} kanit kayip): {}", worker_id, toplu.len(), e),
             }
         }
         } // else (embed/rag kanit kolu) sonu

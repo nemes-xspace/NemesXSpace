@@ -135,7 +135,7 @@ struct GorevPayload {
     yedek: Option<Vec<YedekParca>>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Clone)]
 struct KanitReq {
     gorev_id: String,
     madde_id: i64,
@@ -1332,6 +1332,62 @@ async fn dagit_denetim(state: &Arc<AppState>, auditor: &str) -> Result<Option<Go
         deadline: now + TASK_DEADLINE_SEC,
         payload: GorevPayload { metinler, madde_idler, denetim: Some(refs), yedek: None },
     }))
+}
+
+/// Toplu kanit girisi (B14 olcek): bir gorevin kanitlari TEK HTTP istegiyle.
+/// Geriye uyumlu EK yol; `/api/kanit` tekil akis aynen durur (eski miner'lar,
+/// win .exe). Her kalem mevcut `kanit()` mantigiyla islenir (auth/kara/kor,
+/// odul/emanet/kapanis birebir ayni kod): sonuc dizisi doner, kalem hatasi
+/// batch'i durdurmaz. Cap: TOPLU_EN_FAZLA (DoS freni).
+const TOPLU_EN_FAZLA: usize = 100;
+
+#[derive(Serialize)]
+struct TopluKalemResp {
+    madde_id: i64,
+    kabul: bool,
+    hata: Option<String>,
+    spot: bool,
+    batch_tamam: bool,
+    odul_mikro: i64,
+}
+
+async fn kanit_toplu(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(istekler): Json<Vec<KanitReq>>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    if istekler.is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "bos toplu kanit".to_string()));
+    }
+    if istekler.len() > TOPLU_EN_FAZLA {
+        return Err((
+            StatusCode::BAD_REQUEST,
+            format!("toplu kanit cok buyuk ({} > {})", istekler.len(), TOPLU_EN_FAZLA),
+        ));
+    }
+    let mut sonuclar = Vec::with_capacity(istekler.len());
+    for req in &istekler {
+        let mid = req.madde_id;
+        match kanit(State(state.clone()), headers.clone(), Json(req.clone())).await {
+            Ok(Json(r)) => sonuclar.push(TopluKalemResp {
+                madde_id: mid,
+                kabul: true,
+                hata: None,
+                spot: r.spot_check,
+                batch_tamam: r.batch_tamam,
+                odul_mikro: r.odul_mikro,
+            }),
+            Err((kod, mesaj)) => sonuclar.push(TopluKalemResp {
+                madde_id: mid,
+                kabul: false,
+                hata: Some(format!("{}: {}", kod.as_u16(), mesaj)),
+                spot: false,
+                batch_tamam: false,
+                odul_mikro: 0,
+            }),
+        }
+    }
+    Ok(Json(serde_json::json!({ "sonuclar": sonuclar })))
 }
 
 async fn kanit(
@@ -2629,6 +2685,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/heartbeat", post(heartbeat))
         .route("/api/gorev", get(gorev))
         .route("/api/kanit", post(kanit))
+        .route("/api/kanit/toplu", post(kanit_toplu))
         .route("/api/status", get(status))
         .route("/api/bakiye", get(bakiye))
         .route("/api/arz", get(arz))
@@ -3039,6 +3096,81 @@ mod tests {
                 .bind(mid).fetch_one(&state.pool).await.unwrap();
             assert_eq!(coin, defter, "defter tutarli olmali: {}", mid);
         }
+    }
+
+    #[tokio::test]
+    async fn test_toplu_yasam_dongusu() {
+        // B14: 20 kanit TEK istekte; kapanis + odul korunumu tekil akisla esdeger.
+        let state = test_state().await;
+        for (mid, tok) in [("m1", "t1"), ("m2", "t2")] {
+            sqlx::query("INSERT INTO miners (miner_id, token, cuzdan, makine_id, created_at) VALUES (?, ?, 'c', 'mk', 1)")
+                .bind(mid).bind(tok).execute(&state.pool).await.unwrap();
+        }
+        sqlx::query("INSERT INTO gorevler (gorev_id, dagitilan_miner, corpus, offset, beklenen, alinan, durum, odul_mikro, ts) VALUES ('test:2', 'm1', 'test', 0, 20, 0, 'acik', 0, 1)")
+            .execute(&state.pool).await.unwrap();
+        for i in 0..20i64 {
+            sqlx::query("INSERT INTO kor_esleme (kor_id, madde_id, gorev_id, ts) VALUES (?, ?, 'test:2', 1)")
+                .bind(6000 + i).bind(101 + i).execute(&state.pool).await.unwrap();
+        }
+        let vb = test_vektor(7);
+        let istekler: Vec<KanitReq> = (0..20i64)
+            .map(|i| KanitReq {
+                gorev_id: "test:2".to_string(),
+                madde_id: 6000 + i,
+                v_int8_b64: vb.clone(),
+                v_min: 0.0,
+                v_max: 1.0,
+                imza: None,
+            })
+            .collect();
+        let resp = kanit_toplu(State(state.clone()), test_headers("t1"), Json(istekler))
+            .await
+            .unwrap()
+            .0;
+        let sonuclar = resp.get("sonuclar").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(sonuclar.len(), 20, "20 kalem donmeli");
+        assert!(sonuclar.iter().all(|s| s.get("kabul").and_then(|x| x.as_bool()) == Some(true)), "hepsi kabul");
+        assert!(sonuclar.iter().any(|s| s.get("batch_tamam").and_then(|x| x.as_bool()) == Some(true)), "batch kapanmali");
+        let odenen: i64 = sqlx::query_scalar("SELECT COALESCE(SUM(coin_mikro),0) FROM miners")
+            .fetch_one(&state.pool).await.unwrap();
+        let emanet: i64 = sqlx::query_scalar("SELECT COALESCE(SUM(miktar_mikro),0) FROM escrow")
+            .fetch_one(&state.pool).await.unwrap();
+        assert_eq!(odenen + emanet, 2000, "batch odulu korunmali");
+        // Ayni batch tekrar: 20 kalem de CONFLICT ile reddedilir, odul degismez.
+        let istekler2: Vec<KanitReq> = (0..20i64)
+            .map(|i| KanitReq {
+                gorev_id: "test:2".to_string(),
+                madde_id: 6000 + i,
+                v_int8_b64: vb.clone(),
+                v_min: 0.0,
+                v_max: 1.0,
+                imza: None,
+            })
+            .collect();
+        let resp2 = kanit_toplu(State(state.clone()), test_headers("t1"), Json(istekler2))
+            .await
+            .unwrap()
+            .0;
+        let son2 = resp2.get("sonuclar").and_then(|v| v.as_array()).unwrap();
+        assert!(son2.iter().all(|s| s.get("kabul").and_then(|x| x.as_bool()) == Some(false)), "cift kayit reddedilmeli");
+        let odenen2: i64 = sqlx::query_scalar("SELECT COALESCE(SUM(coin_mikro),0) FROM miners")
+            .fetch_one(&state.pool).await.unwrap();
+        let emanet2: i64 = sqlx::query_scalar("SELECT COALESCE(SUM(miktar_mikro),0) FROM escrow")
+            .fetch_one(&state.pool).await.unwrap();
+        assert_eq!(odenen2 + emanet2, 2000, "tekrar odul uretmemeli");
+        // Bos + asiri batch reddedilir.
+        assert!(kanit_toplu(State(state.clone()), test_headers("t1"), Json(vec![])).await.is_err());
+        let asiri: Vec<KanitReq> = (0..101i64)
+            .map(|i| KanitReq {
+                gorev_id: "test:2".to_string(),
+                madde_id: 6000 + i,
+                v_int8_b64: vb.clone(),
+                v_min: 0.0,
+                v_max: 1.0,
+                imza: None,
+            })
+            .collect();
+        assert!(kanit_toplu(State(state.clone()), test_headers("t1"), Json(asiri)).await.is_err());
     }
 
     #[tokio::test]
