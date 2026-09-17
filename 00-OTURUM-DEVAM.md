@@ -98,7 +98,7 @@ b1b3770 GPU geri | 26def41 GPU 300W
 - B12. KAPANDI ✅ (17 Eyl): ilk canlı mesh — miner-b dinliyor, komuta+miner gossip bağlı. Dinleyici açık bırakıldı.
 - B13. KAPANDI ✅ (17 Eyl): claim'ler canlı corpus'a çıpalandı (1.72M); istek hızı 0.76/sn/miner + kilit 0ms ölçüldü.
 - B14. KAPANDI ✅ (17 Eyl): toplu-kanıt (`/api/kanit/toplu`, cap 100) — 20 HTTP→1, tekil yol duruyor, test 24/24, canlıda.
-- B15. Mesh denetim protokolü (YENİ, P2, Faz 1): komşu-kanıtı-komşu-doğrular, komuta hakem. Bugünkü `denetim/sonuc` taşınır. NOT (17 Eyl win bulgusu): win 707 denetim görevi aldı, 0 sonuç — yavaş denetçi yarışı kaybediyor (409), boşa dağıtım/saat ~220. Hız-sınıfı veya itibar-kapılı dağıtım B15'e işlenecek.
+- B15. KAPANDI ✅ (17 Eyl): mesh denetim v1 canlı — duyuru+metin-kapısı+hakem, miner-b 239/7dk, 0 hata. Eski yol duruyor.
 - B16. Defter federasyonu (YENİ, P3, Faz 2): bölge dağıtıcıları + epoch özet mutabakatı. 1M önkoşulu.
 - B17. KAPANDI ✅ (17 Eyl): stres tablosu düzeltildi (100x hata + frenli 1M satırı + ölçülü altyapı tablosu).
 - B11. Gece nöbeti (bu akşam): `gece-gozlem.sh` tekrar kurulsun mu — operatör onaylı varsayım, akşam sorulacak.

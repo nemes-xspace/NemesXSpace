@@ -70,6 +70,12 @@ enum Commands {
         /// HTTP'den gorevi cek. Kapaliyken eski poll (5/10sn) aynen calisir.
         #[arg(long, default_value_t = false)]
         p2p_dinle: bool,
+        /// Mesh denetim (B15): nemes/denetim duyurularindaki kendine dusen
+        /// atamalari al, metni komutadan cek, denetle, sonucu gonder.
+        /// Kapaliyken komuta-aracili denetim gorevleri aynen calisir.
+        /// --p2p-dinle gerektirir (yoksa uyariyla yoksayilir).
+        #[arg(long, default_value_t = false)]
+        denetim_mesh: bool,
         /// Depolama dizini (taahhut + parcalar). Bos ise ~/.nemes/depolama;
         /// taahhut yoksa heartbeat parcasiz gider (compute-only).
         #[arg(long, default_value = "")]
@@ -138,10 +144,10 @@ async fn main() -> anyhow::Result<()> {
                 println!("KATMAN: storage (komuta C5 sonrasi bu taahhutu isteyecek)");
             }
         }
-        Some(Commands::Mine { gpu, simple, komuta, token, embed_api, model, corpus, anahtar, shard_adet, p2p_port, p2p_dinle, depolama }) => {
+        Some(Commands::Mine { gpu, simple, komuta, token, embed_api, model, corpus, anahtar, shard_adet, p2p_port, p2p_dinle, denetim_mesh, depolama }) => {
             let token = token_coz(&token)?;
             if simple {
-                simple_mine(&gpu, &komuta, &token, &embed_api, &model, &corpus, &anahtar, shard_adet, p2p_port, p2p_dinle, &depolama).await?;
+                simple_mine(&gpu, &komuta, &token, &embed_api, &model, &corpus, &anahtar, shard_adet, p2p_port, p2p_dinle, denetim_mesh, &depolama).await?;
             } else {
                 full_tui_mine(&gpu, &komuta).await?;
             }
@@ -216,7 +222,7 @@ async fn miner_id_ogren(komuta: &str, token: &str) -> anyhow::Result<String> {
 }
 
 // ——— Basit log (xmrig klasik) — GERCEK IS: gorev al -> embed -> kanit ---
-async fn simple_mine(_gpu: &str, komuta: &str, token: &str, embed_api: &str, model: &str, corpus: &str, anahtar: &str, shard_adet: i64, p2p_port: u16, p2p_dinle: bool, depolama: &str) -> anyhow::Result<()> {
+async fn simple_mine(_gpu: &str, komuta: &str, token: &str, embed_api: &str, model: &str, corpus: &str, anahtar: &str, shard_adet: i64, p2p_port: u16, p2p_dinle: bool, denetim_mesh: bool, depolama: &str) -> anyhow::Result<()> {
     use miner_core::{mining_loop, EmbedClient, GorevAlici, KanitGonderici};
     use miner_core::{anahtar_yolu, anahtar_yukle_veya_uret, ilan_imzala, simdi_ms, ShardRelay, SigningKey};
     use miner_core::depolama as dep;
@@ -304,8 +310,52 @@ async fn simple_mine(_gpu: &str, komuta: &str, token: &str, embed_api: &str, mod
     // R4/P2P: gorev duyuru dinleyicisi (opsiyonel, default kapali).
     // Acikken nemes/gorev mesh duyurusu gelince mining dongusu beklemeden
     // uyanir. Kapaliyken davranis tamamen eski poll'dur (canli miner etkilenmez).
+    // B15 mesh-denetim: --denetim-mesh, --p2p-dinle gerektirir.
+    let denetim_mesh = if denetim_mesh && !p2p_dinle {
+        eprintln!("mesh-denetim --p2p-dinle olmadan calismaz (yoksayildi)");
+        false
+    } else {
+        denetim_mesh
+    };
     let uyan_rx: Option<tokio::sync::watch::Receiver<u64>> = if p2p_dinle {
         let (tx, rx) = tokio::sync::watch::channel(0u64);
+        // B15 audit iscisi: duyurudan kendine dusen atamalari isler (ayri gorev,
+        // dinleyiciyi tıkamaz; sirayla: metin -> embed -> sonuc).
+        let (audit_tx, mut audit_rx) = tokio::sync::mpsc::unbounded_channel::<(String, i64)>();
+        let audit_ec = embed_client.clone();
+        let audit_kg = kanit_gonderici.clone();
+        tokio::spawn(async move {
+            use miner_core::embed_retry;
+            while let Some((gorev, kor)) = audit_rx.recv().await {
+                let m = match audit_kg.metin_al(kor).await {
+                    Ok(x) => x,
+                    Err(e) => {
+                        eprintln!("mesh-denetim metin hatasi (kor={}): {}", kor, e);
+                        continue;
+                    }
+                };
+                let v = match embed_retry(&audit_ec, &[m.metin]).await {
+                    Ok(mut vv) => vv.pop().unwrap_or_default(),
+                    Err(e) => {
+                        eprintln!("mesh-denetim embed hatasi (kor={}): {}", kor, e);
+                        continue;
+                    }
+                };
+                if v.is_empty() {
+                    continue;
+                }
+                let (b64, vmin, vmax) = miner_core::denetim_paketle(&v);
+                match audit_kg.denetim_gonder(&gorev, kor, b64, vmin, vmax).await {
+                    Ok(r) => eprintln!("mesh-denetim {} kor={} gecerli={} cos={:.4}", gorev, kor, r.gecerli, r.dogrulama),
+                    Err(e) => eprintln!("mesh-denetim gonderme hatasi (kor={}): {}", kor, e),
+                }
+            }
+        });
+        let benim: Option<String> = shard_mid.clone();
+        let mesh_acik = denetim_mesh && benim.is_some();
+        if denetim_mesh && benim.is_none() {
+            eprintln!("mesh-denetim kapali: miner_id yok");
+        }
         tokio::spawn(async move {
             let mut sayac = 0u64;
             let mut node = match nemes_p2p::P2PNode::new(nemes_p2p::P2PConfig { port: p2p_port, enable_mdns: true }).await {
@@ -320,16 +370,37 @@ async fn simple_mine(_gpu: &str, komuta: &str, token: &str, embed_api: &str, mod
                 None => return,
             };
             println!("◈ gorev duyurusu dinleniyor: {} (port {})", nemes_p2p::GOREV_TOPIC, p2p_port);
+            if mesh_acik {
+                println!("◈ mesh denetim acik: {}", nemes_core::mesh_audit::DENETIM_TOPIC);
+            }
             loop {
                 if node.run_for(5).await.is_err() {
                     tokio::time::sleep(Duration::from_secs(5)).await;
                     continue;
                 }
                 while let Ok(ev) = ev_rx.try_recv() {
-                    if let nemes_p2p::NetworkEvent::MessageReceived { topic, .. } = ev {
+                    if let nemes_p2p::NetworkEvent::MessageReceived { topic, data, .. } = ev {
                         if topic == nemes_p2p::GOREV_TOPIC {
                             sayac += 1;
                             let _ = tx.send(sayac);
+                        } else if mesh_acik && topic == nemes_core::mesh_audit::DENETIM_TOPIC {
+                            match serde_json::from_slice::<nemes_core::mesh_audit::DenetimDuyuru>(&data) {
+                                Ok(duy) => {
+                                    let mut bana = 0;
+                                    for a in &duy.atamalar {
+                                        if let Some(ref mid) = benim {
+                                            if a.denetciler.iter().any(|d| d == mid) {
+                                                bana += 1;
+                                                let _ = audit_tx.send((a.gorev.clone(), a.kor));
+                                            }
+                                        }
+                                    }
+                                    if bana > 0 {
+                                        println!("◈ mesh denetim duyurusu: {} ({} bana)", duy.gorev_id, bana);
+                                    }
+                                }
+                                Err(e) => eprintln!("bozuk mesh duyurusu: {}", e),
+                            }
                         }
                     }
                 }

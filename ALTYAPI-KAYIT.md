@@ -110,6 +110,15 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-17: **Mesh denetim v1 canlı (B15).** Çift-yığın: komuta kapanan
+  batch'te bayraklılar için deterministik atama duyurusu (`nemes/denetim`,
+  blake3 korosu, `nemes-core::mesh_audit` paylaşımlı + testli) + metin kapısı
+  (`GET /api/metin/:kor`, salt-okunur) + hakem (`denetim/sonuc` aynen).
+  Eski `dagit_denetim` yolu duruyor (win .exe uyumluluğu). Miner `--denetim-mesh`
+  (miner-b açık): duyuru→metin→embed→sonuç, 7dk'da 239 mesh denetimi, 0 hata.
+  Kuyruk erimeye devam (127→125K). Binary'ler `.20260917-mesh.bak`'ta.
+  Test: komuta 13/13 + miner-core 12/12 + nemes-core 10/10.
+  Ara not: D-Bus bir kez takıldı (swap baskısı); miner-b 1dk durdu, döndü.
 - 2026-09-17: **Yaşlı emanet serbest bırakıldı (50 satır, 4750 mikro).** Hepsi
   kanarya sentetiği (madde<0, 16 Eyl kesimi) — doğrulanamaz, sonsuz alarm
   üretiyordu. Operatör onayı (a) ile: coin+=miktar + ledger 'escrow', tek

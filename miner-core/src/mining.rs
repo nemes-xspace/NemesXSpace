@@ -47,6 +47,14 @@ pub struct Kanit {
     pub imza: Option<String>,  // Ed25519 imza (Faz2)
 }
 
+/// Mesh metin yaniti - kor ID ile asil metin (B15 metin kapisi).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MetinResp {
+    pub gorev_id: String,
+    pub madde_id: i64,
+    pub metin: String,
+}
+
 /// Denetim sonucu yanıtı - komuta kosinüsü kendisi hesaplar
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DenetimSonucResp {
@@ -327,6 +335,23 @@ impl KanitGonderici {
             return Err(anyhow::anyhow!("denetim http {}: {}", status, err));
         }
         let out: DenetimSonucResp = resp.json().await?;
+        Ok(out)
+    }
+
+    /// Mesh metin al (B15): kor ID ile asil metin. Komuta metin kapisi.
+    pub async fn metin_al(&self, kor: i64) -> anyhow::Result<MetinResp> {
+        let url = format!("{}/api/metin/{}", self.base_url.trim_end_matches('/'), kor);
+        let resp = self.client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", self.token))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            let status = resp.status();
+            let err = resp.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("metin http {}: {}", status, err));
+        }
+        let out: MetinResp = resp.json().await?;
         Ok(out)
     }
 }
@@ -616,6 +641,12 @@ pub async fn mining_loop(
     }
 
     Ok(())
+}
+
+/// Mesh-denetim paketi (B15 miner yardimcisi): vektor -> (b64, min, max).
+pub fn denetim_paketle(vektor: &[f32]) -> (String, f32, f32) {
+    let (q, lo, hi) = int8_nicele(vektor);
+    (B64_STANDARD.encode(&q), lo, hi)
 }
 
 /// wiki_embed_par.py:44 ile birebir aynı niceleme (clamp'li)

@@ -1,6 +1,6 @@
 // Copyright (c) 2026 NEMES-X. All Rights Reserved. Unauthorized use prohibited.
 use axum::{
-    extract::{Query, State},
+    extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Json, Response},
     routing::{get, post},
@@ -13,6 +13,7 @@ use sqlx::{SqlitePool, Row, query_as};
 use sqlx::sqlite::SqlitePoolOptions;
 use nemes_core::shard::ShardIlan;
 use nemes_p2p::{NetworkEvent, P2PConfig, P2PNode, GOREV_TOPIC};
+use nemes_core::mesh_audit::{DENETIM_TOPIC, DENETIM_SAYISI, DenetimDuyuru, KanitAtama, denetciler};
 use rand::Rng;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
 use tokio::signal;
@@ -81,7 +82,7 @@ struct AppState {
     /// P2P gorev duyuru kuyrugu (None = yayin kapali). gorev_kaydet basarili
     /// dagitimi buraya atar, shard-abone gorevi mesh'e yayinlar (R4/P2P).
     /// HTTP dagitim yolu bundan etkilenmez (hata yoksayilir).
-    gorev_yayin_tx: Option<tokio::sync::mpsc::UnboundedSender<Vec<u8>>>,
+    gorev_yayin_tx: Option<tokio::sync::mpsc::UnboundedSender<(String, Vec<u8>)>>,
     /// Oz-denetim engeli (mainnet oncesi acilir): denetci kendi kanitini
     /// denetleyemez. Testnet toleransi icin default kapali (sadece warn).
     strict_denetim: bool,
@@ -1101,7 +1102,7 @@ async fn gorev_kaydet(
     if let Some(tx) = state.gorev_yayin_tx.as_ref() {
         let duyuru = serde_json::json!({"gorev_id": gid, "corpus": corpus_kodu(&state.corpus), "ts": now_ts});
         if let Ok(raw) = serde_json::to_vec(&duyuru) {
-            let _ = tx.send(raw);
+            let _ = tx.send((GOREV_TOPIC.to_string(), raw));
         }
     }
     Ok(GorevResp {
@@ -1390,6 +1391,87 @@ async fn kanit_toplu(
     Ok(Json(serde_json::json!({ "sonuclar": sonuclar })))
 }
 
+/// Mesh denetim duyurusu kur (B15): kapanan batch'teki bayrakli kanitlar icin
+/// dagitim kor eslemesi + deterministik denetci atamasi. Dagitim YOK (sadece
+/// duyuru metni); tasma isini mesh denetciler + hakem (`denetim/sonuc`) gorur.
+/// Eski `dagit_denetim` yolu aynen durur (mesh-disi miner'lar, win .exe).
+/// Donen None = duyurulacak bayrakli kanit yok.
+async fn mesh_duyuru_kur(
+    state: &Arc<AppState>,
+    gorev_id: &str,
+    salt_gun: i64,
+    simdi: i64,
+) -> anyhow::Result<Option<DenetimDuyuru>> {
+    // Bayrakli (emanetteki) kanitlar + dagitim kor eslemesi (tekil: MIN kor).
+    let satirlar = sqlx::query(
+        "SELECT k.miner_id, k.madde_id, MIN(e.kor_id) AS kor FROM kanitlar k JOIN kor_esleme e ON e.gorev_id = k.gorev_id AND e.madde_id = k.madde_id WHERE k.gorev_id = ? AND k.spot_check = 1 AND k.dogrulama IS NULL AND k.madde_id >= 0 GROUP BY k.miner_id, k.madde_id"
+    )
+    .bind(gorev_id)
+    .fetch_all(&state.pool)
+    .await?;
+    if satirlar.is_empty() {
+        return Ok(None);
+    }
+    // Aday havuzu: kalp atisi taze madenciler (olu esik alti).
+    let adaylar: Vec<String> = sqlx::query_scalar(
+        "SELECT miner_id FROM miners WHERE last_seen > ?"
+    )
+    .bind(simdi - OLU_ESIK_SN)
+    .fetch_all(&state.pool)
+    .await?;
+    let mut atamalar = Vec::new();
+    for r in &satirlar {
+        let prover: String = r.get("miner_id");
+        let kor: i64 = r.get("kor");
+        let sec = denetciler(gorev_id, salt_gun, &adaylar, &prover, DENETIM_SAYISI);
+        if sec.is_empty() {
+            continue;
+        }
+        atamalar.push(KanitAtama { kor, gorev: gorev_id.to_string(), denetciler: sec });
+    }
+    if atamalar.is_empty() {
+        return Ok(None);
+    }
+    Ok(Some(DenetimDuyuru { gorev_id: gorev_id.to_string(), salt_gun, atamalar }))
+}
+
+/// Mesh denetci metin kapisi (B15): kor ID ile asil metni ver (salt-okunur).
+/// Sadece kayitli miner (token). Eski dagitim yolu etkilenmez.
+async fn metin(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Path(kor): Path<i64>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let _miner_id = token_dogrula(&headers, &state.pool).await?;
+    let row = sqlx::query("SELECT gorev_id, madde_id FROM kor_esleme WHERE kor_id = ?")
+        .bind(kor)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let (gid, mid): (String, i64) = match row {
+        Some(r) => (r.get("gorev_id"), r.get("madde_id")),
+        None => return Err((StatusCode::NOT_FOUND, "bilinmeyen kor ID".to_string())),
+    };
+    let corpus = gid.split(':').next().unwrap_or(&state.corpus).to_string();
+    let wiki_path = format!("/srv/beyin/wiki/wiki_{}.db", corpus);
+    let wiki_db = sqlx::sqlite::SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect(&format!("sqlite:{}?mode=ro", wiki_path))
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("wiki db: {}", e)))?;
+    let srow = sqlx::query("SELECT ozet FROM madde WHERE id = ?")
+        .bind(mid)
+        .fetch_optional(&wiki_db)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let ozet: String = match srow {
+        Some(x) => x.get("ozet"),
+        None => return Err((StatusCode::NOT_FOUND, "madde yok".to_string())),
+    };
+    let metin: String = ozet.chars().take(4500).collect();
+    Ok(Json(serde_json::json!({ "gorev_id": gid, "madde_id": mid, "metin": metin })))
+}
+
 async fn kanit(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -1628,6 +1710,25 @@ async fn kanit(
 
     info!("Batch tamam: gorev={} beklenen={} odul={} mikro ({:.6} NEMES) bitiren={}",
           req.gorev_id, beklenen, batch_odul, batch_odul as f64 / COIN_UNIT as f64, miner_id);
+
+    // B15 mesh duyurusu: bayrakli kanitlar icin atama yayinla.
+    // Hata/eksik yoksayilir (eski dagit_denetim yolu aynen calisir).
+    {
+        let salt_gun = now / 86400;
+        match mesh_duyuru_kur(&state, &req.gorev_id, salt_gun, now).await {
+            Ok(Some(duyuru)) => {
+                let n = duyuru.atamalar.len();
+                if let Ok(raw) = serde_json::to_vec(&duyuru) {
+                    if let Some(tx) = state.gorev_yayin_tx.as_ref() {
+                        let _ = tx.send((DENETIM_TOPIC.to_string(), raw));
+                    }
+                    info!("mesh denetim duyurusu: {} ({} atama)", req.gorev_id, n);
+                }
+            }
+            Ok(None) => {}
+            Err(e) => warn!("mesh duyuru kurulamadi {}: {}", req.gorev_id, e),
+        }
+    }
 
     Ok(Json(KanitResp {
         kabul: true,
@@ -2655,12 +2756,12 @@ async fn main() -> anyhow::Result<()> {
     }
 
     // R4/P2P gorev duyuru kanali: gorev_kaydet -> abone gorevi -> mesh.
-    let (gorev_yayin_tx, gorev_yayin_rx) = tokio::sync::mpsc::unbounded_channel::<Vec<u8>>();
+    let (gorev_yayin_tx, gorev_yayin_rx) = tokio::sync::mpsc::unbounded_channel::<(String, Vec<u8>)>();
     let gorev_yayin_acik = std::env::var("P2P_GOREV_YAYIN").unwrap_or_else(|_| "1".to_string()) != "0";
     if !gorev_yayin_acik {
         info!("P2P gorev yayini kapali (P2P_GOREV_YAYIN=0)");
     }
-    let mut gorev_yayin_rx: Option<tokio::sync::mpsc::UnboundedReceiver<Vec<u8>>> =
+    let mut gorev_yayin_rx: Option<tokio::sync::mpsc::UnboundedReceiver<(String, Vec<u8>)>> =
         if gorev_yayin_acik { Some(gorev_yayin_rx) } else { None };
     let state = Arc::new(AppState {
         pool,
@@ -2693,6 +2794,7 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/komut", post(komut))
         .route("/api/denetim", get(denetim_liste))
         .route("/api/denetim/sonuc", post(denetim_sonuc))
+        .route("/api/metin/:kor", get(metin))
         .route("/api/kanarya/kontrol", get(kanarya_kontrol))
         .route("/api/shard/ilan", post(shard_ilan))
         .route("/api/shard", get(shard_liste))
@@ -2734,10 +2836,10 @@ async fn main() -> anyhow::Result<()> {
                 // R4/P2P: biriken gorev duyurularini mesh'e yayinla.
                 // Bos mesh / hatsiz publish zararsizdir (hata yoksayilir).
                 if let Some(rx) = yayin_rx.as_mut() {
-                    while let Ok(raw) = rx.try_recv() {
-                        match node.publish(GOREV_TOPIC, raw) {
-                            Ok(()) => info!("gorev duyurusu yayinlandi: {}", GOREV_TOPIC),
-                            Err(e) => warn!("gorev duyuru yayin hatasi: {}", e),
+                    while let Ok((konu, raw)) = rx.try_recv() {
+                        match node.publish(&konu, raw) {
+                            Ok(()) => info!("mesh duyurusu yayinlandi: {}", konu),
+                            Err(e) => warn!("mesh duyuru yayin hatasi ({}): {}", konu, e),
                         }
                     }
                 }
@@ -3171,6 +3273,41 @@ mod tests {
             })
             .collect();
         assert!(kanit_toplu(State(state.clone()), test_headers("t1"), Json(asiri)).await.is_err());
+    }
+
+    #[tokio::test]
+    async fn test_mesh_duyuru_turu() {
+        // B15: kapanmis batch'in bayraklilari duyurulur, atama dogrulanabilir.
+        let state = test_state().await;
+        for (mid, tok) in [("m1", "t1"), ("m2", "t2"), ("m3", "t3")] {
+            sqlx::query("INSERT INTO miners (miner_id, token, cuzdan, makine_id, created_at, last_seen) VALUES (?, ?, 'c', 'mk', 1, 9999999999)")
+                .bind(mid).bind(tok).execute(&state.pool).await.unwrap();
+        }
+        sqlx::query("INSERT INTO gorevler (gorev_id, dagitilan_miner, corpus, offset, beklenen, alinan, durum, odul_mikro, ts) VALUES ('test:4', 'm1', 'test', 0, 2, 0, 'acik', 0, 1)")
+            .execute(&state.pool).await.unwrap();
+        for (kor, mid) in [(7001i64, 201i64), (7002, 202)] {
+            sqlx::query("INSERT INTO kor_esleme (kor_id, madde_id, gorev_id, ts) VALUES (?, ?, 'test:4', 1)")
+                .bind(kor).bind(mid).execute(&state.pool).await.unwrap();
+            sqlx::query("INSERT INTO kanitlar (gorev_id, madde_id, miner_id, v_int8_b64, v_min, v_max, odul_mikro, spot_check, ts) VALUES ('test:4', ?, 'm1', 'eA', 0.0, 1.0, 0, 1, 1)")
+                .bind(mid).execute(&state.pool).await.unwrap();
+        }
+        let d = mesh_duyuru_kur(&state, "test:4", 42, 9999999999).await.unwrap();
+        let d = d.expect("bayrakli varken duyuru kurulmali");
+        assert_eq!(d.atamalar.len(), 2);
+        // Yeniden hesapla-dogrula (paylasilan modulle ayni sonuc).
+        let mut proverlar = std::collections::HashMap::new();
+        proverlar.insert(7001i64, "m1".to_string());
+        proverlar.insert(7002i64, "m1".to_string());
+        let kayitli = vec!["m1".to_string(), "m2".to_string(), "m3".to_string()];
+        assert!(nemes_core::mesh_audit::duyuru_dogrula(&d, &kayitli, &proverlar));
+        // Denetciler m1 degil, 2 kisi.
+        for a in &d.atamalar {
+            assert_eq!(a.denetciler.len(), 2);
+            assert!(!a.denetciler.contains(&"m1".to_string()));
+        }
+        // Bayrak yoksa None.
+        sqlx::query("UPDATE kanitlar SET spot_check = 0 WHERE gorev_id = 'test:4'").execute(&state.pool).await.unwrap();
+        assert!(mesh_duyuru_kur(&state, "test:4", 42, 9999999999).await.unwrap().is_none());
     }
 
     #[tokio::test]
