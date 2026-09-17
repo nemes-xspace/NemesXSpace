@@ -909,6 +909,215 @@ async fn kira_al(
     Ok(Json(serde_json::json!({ "gorevler": liste })))
 }
 
+/// Teklif sabitleri (B21 kendi-kendine ogrenme): stake, vade, esikler.
+const TEKLIF_STAKE_MIKRO: i64 = 500;
+const TEKLIF_VADE_SN: i64 = 7 * 86400;
+const TEKLIF_KAPSAMA_RED: f64 = 0.5; // bu oranda kapaliysa teklif RED (ucretsiz)
+const TEKLIF_KAPSAMA_BITIS: f64 = 0.8; // bu orana ulasirsa tamam + iade
+const TEKLIF_MAX_ARALIK: i64 = 100000;
+
+/// Aralik kapsama orani (B21): kanitlanmis farkli madde / genislik.
+async fn aralik_kapsama(
+    pool: &SqlitePool,
+    baslangic: i64,
+    bitis: i64,
+) -> Result<(i64, i64), (StatusCode, String)> {
+    let genislik = (bitis - baslangic + 1).max(1);
+    let kapali: i64 = sqlx::query_scalar(
+        "SELECT COUNT(DISTINCT madde_id) FROM kanitlar WHERE madde_id >= ? AND madde_id <= ?",
+    )
+    .bind(baslangic)
+    .bind(bitis)
+    .fetch_one(pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok((kapali, genislik))
+}
+
+#[derive(Deserialize)]
+struct TeklifIstek {
+    corpus: String,
+    baslangic: i64,
+    bitis: i64,
+}
+
+/// Bosluk teklifi ver (B21): stake kilitlenir, aralik supurme onceligi kazanir.
+async fn teklif_ver(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(istek): Json<TeklifIstek>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let miner_id = token_dogrula(&headers, &state.pool).await?;
+    let corpus = istek.corpus.trim().to_string();
+    if corpus.is_empty() || istek.bitis <= istek.baslangic {
+        return Err((StatusCode::BAD_REQUEST, "gecersiz aralik".to_string()));
+    }
+    if istek.bitis - istek.baslangic + 1 > TEKLIF_MAX_ARALIK {
+        return Err((StatusCode::BAD_REQUEST, "aralik cok genis".to_string()));
+    }
+    if corpus != state.corpus {
+        return Err((StatusCode::BAD_REQUEST, "su anki corpus degil".to_string()));
+    }
+    // Ayni madencinin acik cakisan teklifi varsa yenisini acma, mevcudu dondur.
+    if let Some(row) = sqlx::query(
+        "SELECT id FROM teklifler WHERE durum = 'acik' AND miner_id = ? AND corpus = ? AND baslangic <= ? AND bitis >= ? ORDER BY ts ASC LIMIT 1",
+    )
+    .bind(&miner_id)
+    .bind(&corpus)
+    .bind(istek.bitis)
+    .bind(istek.baslangic)
+    .fetch_optional(&state.pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    {
+        let id: i64 = row.get("id");
+        return Ok(Json(serde_json::json!({ "teklif_id": id, "durum": "mevcut" })));
+    }
+    // Kapsama redde: zaten kapali araliga teklif ucretsiz RED.
+    let (kapali, genislik) = aralik_kapsama(&state.pool, istek.baslangic, istek.bitis).await?;
+    if kapali as f64 / genislik as f64 >= TEKLIF_KAPSAMA_RED {
+        return Err((StatusCode::CONFLICT, "aralik zaten kapali".to_string()));
+    }
+    // Bakiye + stake kilidi (slash deseni: coin dus, ledger negatif).
+    let bakiye: i64 = sqlx::query_scalar("SELECT coin_mikro FROM miners WHERE miner_id = ?")
+        .bind(&miner_id)
+        .fetch_one(&state.pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    if bakiye < TEKLIF_STAKE_MIKRO {
+        return Err((StatusCode::PAYMENT_REQUIRED, "stake bakiyesi yetmez".to_string()));
+    }
+    let now = current_epoch();
+    sqlx::query("UPDATE miners SET coin_mikro = coin_mikro - ? WHERE miner_id = ?")
+        .bind(TEKLIF_STAKE_MIKRO)
+        .bind(&miner_id)
+        .execute(&state.pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    sqlx::query(
+        "INSERT INTO ledger (miner_id, delta_mikro, neden, epoch, ts) VALUES (?, ?, 'teklif-kilit', ?, ?)",
+    )
+    .bind(&miner_id)
+    .bind(-TEKLIF_STAKE_MIKRO)
+    .bind(now)
+    .bind(now)
+    .execute(&state.pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let r = sqlx::query(
+        "INSERT INTO teklifler (miner_id, corpus, baslangic, bitis, stake_mikro, durum, ts) VALUES (?, ?, ?, ?, ?, 'acik', ?)",
+    )
+    .bind(&miner_id)
+    .bind(&corpus)
+    .bind(istek.baslangic)
+    .bind(istek.bitis)
+    .bind(TEKLIF_STAKE_MIKRO)
+    .bind(now)
+    .execute(&state.pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let id = r.last_insert_rowid();
+    info!("teklif acildi: #{} {} [{},{}] <- {}", id, corpus, istek.baslangic, istek.bitis, miner_id);
+    Ok(Json(serde_json::json!({ "teklif_id": id, "durum": "acik" })))
+}
+
+/// Bosluk yayincisi (B21): geri kalmis pencereler + acik teklifler (ucuz sorgular).
+async fn bosluklar(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let _miner_id = token_dogrula(&headers, &state.pool).await?;
+    let now = current_epoch();
+    // Cursor-supurme makasi (bilinen geri kalmislik).
+    let son: i64 = sqlx::query_scalar("SELECT son_id FROM gorev_cursor WHERE corpus = ?")
+        .bind(&state.corpus)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .unwrap_or(0);
+    let sup_key = format!("supurme:{}", state.corpus);
+    let sup: i64 = sqlx::query_scalar("SELECT son_id FROM gorev_cursor WHERE corpus = ?")
+        .bind(&sup_key)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        .unwrap_or(0);
+    // Kapanmamis eski batch'ler (olu gorev supurme adaylari).
+    let oluler = sqlx::query(
+        "SELECT gorev_id, offset FROM gorevler WHERE durum = 'acik' AND ts < ? ORDER BY ts ASC LIMIT 10",
+    )
+    .bind(now - 3600)
+    .fetch_all(&state.pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let olu_liste: Vec<serde_json::Value> = oluler
+        .iter()
+        .map(|r| {
+            let g: String = r.get("gorev_id");
+            let o: i64 = r.get("offset");
+            serde_json::json!({ "gorev_id": g, "offset": o })
+        })
+        .collect();
+    let acik = sqlx::query(
+        "SELECT id, miner_id, corpus, baslangic, bitis, ts FROM teklifler WHERE durum = 'acik' ORDER BY ts ASC LIMIT 20",
+    )
+    .fetch_all(&state.pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let acik_liste: Vec<serde_json::Value> = acik
+        .iter()
+        .map(|r| {
+            let id: i64 = r.get("id");
+            let m: String = r.get("miner_id");
+            let c: String = r.get("corpus");
+            let b0: i64 = r.get("baslangic");
+            let b1: i64 = r.get("bitis");
+            serde_json::json!({ "id": id, "miner": m, "corpus": c, "baslangic": b0, "bitis": b1 })
+        })
+        .collect();
+    Ok(Json(serde_json::json!({
+        "cursor": son,
+        "supurme": sup,
+        "makas": (son - sup).max(0),
+        "olu_gorevler": olu_liste,
+        "acik_teklifler": acik_liste,
+    })))
+}
+
+/// Madencinin teklifleri (B21): durum + kazanilan pay ozeti.
+async fn tekliflerim(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let miner_id = token_dogrula(&headers, &state.pool).await?;
+    let rows = sqlx::query(
+        "SELECT id, corpus, baslangic, bitis, stake_mikro, durum, ts FROM teklifler WHERE miner_id = ? ORDER BY ts DESC LIMIT 50",
+    )
+    .bind(&miner_id)
+    .fetch_all(&state.pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let kazanc: i64 = sqlx::query_scalar(
+        "SELECT COALESCE(SUM(delta_mikro),0) FROM ledger WHERE miner_id = ? AND neden IN ('teklif-odul','teklif-iade')",
+    )
+    .bind(&miner_id)
+    .fetch_one(&state.pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let liste: Vec<serde_json::Value> = rows
+        .iter()
+        .map(|r| {
+            let id: i64 = r.get("id");
+            let c: String = r.get("corpus");
+            let b0: i64 = r.get("baslangic");
+            let b1: i64 = r.get("bitis");
+            let d: String = r.get("durum");
+            serde_json::json!({ "id": id, "corpus": c, "baslangic": b0, "bitis": b1, "durum": d })
+        })
+        .collect();
+    Ok(Json(serde_json::json!({ "teklifler": liste, "kazanc_mikro": kazanc })))
+}
+
 async fn gorev(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -1391,12 +1600,88 @@ async fn gorev_kaydet(
 /// supurme cursor'u `gorev_cursor.supurme:<corpus>` satirinda tutulur;
 /// yakalayinca basa sarar (olumcul batch'ler bir sonraki turda tekrar denenir).
 /// Donen: (offset, metinler, madde_idler). Yoksa None.
+/// Teklif oncelikli supurme (B21): en eski acik teklifin kapsanmamis ilk 20'si.
+/// Teklif yoksa/kapandiysa None (normal supurgeye dusulur).
+/// ATTACH yerine 3 sinirli sorgu (testte :memory: wiki ile calisir).
+async fn teklif_supurme_dene(
+    state: &Arc<AppState>,
+) -> Result<Option<(i64, Vec<String>, Vec<i64>)>, (StatusCode, String)> {
+    let acik: Vec<(i64, String, i64, i64)> = sqlx::query_as(
+        "SELECT id, corpus, baslangic, bitis FROM teklifler WHERE durum = 'acik' ORDER BY ts ASC LIMIT 5",
+    )
+    .fetch_all(&state.pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let now0 = current_epoch();
+    for (tid, tcorpus, b0, b1) in acik {
+        if tcorpus != state.corpus {
+            continue;
+        }
+        // Aday metinler (wiki havuzundan; uretimde corpus DB, testte tohumlu).
+        let adaylar: Vec<(i64, String)> = sqlx::query_as(
+            "SELECT id, ozet FROM madde WHERE id >= ? AND id <= ? AND length(ozet) > 20 ORDER BY id",
+        )
+        .bind(b0)
+        .bind(b1)
+        .fetch_all(&state.wiki)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        if adaylar.is_empty() {
+            continue;
+        }
+        // Kanitlanmis + taze dagitilmis kumeler (aralik sinirli).
+        let kanitli: std::collections::HashSet<i64> =
+            sqlx::query_scalar("SELECT DISTINCT madde_id FROM kanitlar WHERE madde_id >= ? AND madde_id <= ?")
+                .bind(b0)
+                .bind(b1)
+                .fetch_all(&state.pool)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+                .into_iter()
+                .collect();
+        let dagitilmis: std::collections::HashSet<i64> =
+            sqlx::query_scalar("SELECT madde_id FROM dagitilan_madde WHERE madde_id >= ? AND madde_id <= ? AND ts > ?")
+                .bind(b0)
+                .bind(b1)
+                .bind(now0 - 300)
+                .fetch_all(&state.pool)
+                .await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+                .into_iter()
+                .collect();
+        let mut madde_idler = Vec::new();
+        let mut metinler = Vec::new();
+        for (id, ozet) in adaylar {
+            if kanitli.contains(&id) || dagitilmis.contains(&id) {
+                continue;
+            }
+            madde_idler.push(id);
+            metinler.push(ozet.chars().take(4500).collect());
+            if madde_idler.len() >= TASK_BATCH as usize {
+                break;
+            }
+        }
+        if madde_idler.is_empty() {
+            continue;
+        }
+        let offset = madde_idler[0];
+        info!("teklif supurme: #{} [{},{}] -> {} madde", tid, b0, b1, madde_idler.len());
+        return Ok(Some((offset, metinler, madde_idler)));
+    }
+    Ok(None)
+}
+
 async fn supurme_dene(
     state: &Arc<AppState>,
     son_id: i64,
 ) -> Result<Option<(i64, Vec<String>, Vec<i64>)>, (StatusCode, String)> {
     if son_id <= 0 {
         return Ok(None);
+    }
+    // B21 teklif onceligi: acik teklif araliklarindaki ilk kapsanmamis 20'lik.
+    // Teklif yoksa asagidaki normal supurgeye dusulur (davranis aynen).
+    if let Some(t) = teklif_supurme_dene(state).await? {
+        return Ok(Some(t));
     }
     let sup_key = format!("supurme:{}", state.corpus);
     let srow = sqlx::query("SELECT son_id FROM gorev_cursor WHERE corpus = ?")
@@ -1906,6 +2191,41 @@ async fn kanit(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     let batch_odul = current_batch_reward_micro(tamamlanan);
 
+    // B21 bulucu payi: bu gorev acik teklifteyse (en eski) %1'i bastan ayir.
+    // Basim yok: batch odulunden yonlendirme (korunum: odenen+emanet+ucret=odul).
+    let mut teklif_bilgi: Option<(i64, String, i64, i64)> = None;
+    let mut batch_odul = batch_odul;
+    {
+        if let Some(grow2) = sqlx::query("SELECT corpus, offset FROM gorevler WHERE gorev_id = ?")
+            .bind(&req.gorev_id).fetch_optional(&state.pool).await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+        {
+            let gcorpus: String = grow2.get("corpus");
+            let goffset: i64 = grow2.get("offset");
+            if let Some(trow) = sqlx::query("SELECT id, miner_id, baslangic, bitis FROM teklifler WHERE durum = 'acik' AND corpus = ? AND baslangic <= ? AND bitis >= ? ORDER BY ts ASC LIMIT 1")
+                .bind(&gcorpus).bind(goffset).bind(goffset).fetch_optional(&state.pool).await
+                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+            {
+                let tid: i64 = trow.get("id");
+                let bulucu: String = trow.get("miner_id");
+                let tb0: i64 = trow.get("baslangic");
+                let tb1: i64 = trow.get("bitis");
+                let ucret = batch_odul / 100;
+                if ucret > 0 {
+                    sqlx::query("UPDATE miners SET coin_mikro = coin_mikro + ? WHERE miner_id = ?")
+                        .bind(ucret).bind(&bulucu).execute(&state.pool).await
+                        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                    sqlx::query("INSERT INTO ledger (miner_id, delta_mikro, neden, epoch, ts) VALUES (?, ?, 'teklif-odul', ?, ?)")
+                        .bind(&bulucu).bind(ucret).bind(now).bind(now).execute(&state.pool).await
+                        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                    batch_odul -= ucret;
+                    info!("teklif odulu: #{} <- {} mikro ({})", tid, ucret, bulucu);
+                }
+                teklif_bilgi = Some((tid, bulucu, tb0, tb1));
+            }
+        }
+    }
+
     // B-1: dagitimda KALAN (dogrulanmamis-basarisiz) kanitlar pay almaz;
     // supheli (spot+denetimsiz) kanitlarin payi emanete (escrow) yazilir.
     // Kapanis sayaci (sayi) aynen tum kanitlari sayar (liveness korunur).
@@ -1967,6 +2287,24 @@ async fn kanit(
         dagitilan += pay_i;
         if mid == miner_id && emanet == 0 {
             benim_payim += pay_i;
+        }
+    }
+
+    // B21 tamamlanma: kapsama bittiyse teklifi kapat + stake iade.
+    if let Some((tid, bulucu, tb0, tb1)) = teklif_bilgi {
+        if let Ok((kapali, genislik)) = aralik_kapsama(&state.pool, tb0, tb1).await {
+            if kapali as f64 / genislik.max(1) as f64 >= TEKLIF_KAPSAMA_BITIS {
+                sqlx::query("UPDATE teklifler SET durum = 'tamam', kapanma_ts = ? WHERE id = ? AND durum = 'acik'")
+                    .bind(now).bind(tid).execute(&state.pool).await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                sqlx::query("UPDATE miners SET coin_mikro = coin_mikro + ? WHERE miner_id = ?")
+                    .bind(TEKLIF_STAKE_MIKRO).bind(&bulucu).execute(&state.pool).await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                sqlx::query("INSERT INTO ledger (miner_id, delta_mikro, neden, epoch, ts) VALUES (?, ?, 'teklif-iade', ?, ?)")
+                    .bind(&bulucu).bind(TEKLIF_STAKE_MIKRO).bind(now).bind(now).execute(&state.pool).await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                info!("teklif kapandi: #{} (iade {})", tid, bulucu);
+            }
         }
     }
 
@@ -3080,6 +3418,9 @@ async fn main() -> anyhow::Result<()> {
         .route("/api/heartbeat", post(heartbeat))
         .route("/api/gorev", get(gorev))
         .route("/api/kira/al", post(kira_al))
+        .route("/api/teklif", post(teklif_ver))
+        .route("/api/bosluklar", get(bosluklar))
+        .route("/api/tekliflerim", get(tekliflerim))
         .route("/api/kanit", post(kanit))
         .route("/api/kanit/toplu", post(kanit_toplu))
         .route("/api/status", get(status))
@@ -3182,6 +3523,24 @@ async fn main() -> anyhow::Result<()> {
                         Ok(false) => warn!("yoklama zaman asimi: {} #{} (ilk fail)", mid, yid),
                         Err(e) => warn!("dusurme kontrol hatasi: {}", e),
                     }
+                }
+                // 2.5 B21 teklif vade dolumu: suresi dolan acik tekliflerin
+                // stake'i iade edilir (cezasiz), teklif kapanir.
+                let vade: Vec<(i64, String, i64)> = sqlx::query_as::<_, (i64, String, i64)>(
+                    "SELECT id, miner_id, stake_mikro FROM teklifler WHERE durum = 'acik' AND ts < ?",
+                )
+                .bind(now - TEKLIF_VADE_SN)
+                .fetch_all(&pool_y)
+                .await
+                .unwrap_or_default();
+                for (tid, mid, stake) in vade {
+                    let _ = sqlx::query("UPDATE teklifler SET durum = 'suresi-doldu', kapanma_ts = ? WHERE id = ? AND durum = 'acik'")
+                        .bind(now).bind(tid).execute(&pool_y).await;
+                    let _ = sqlx::query("UPDATE miners SET coin_mikro = coin_mikro + ? WHERE miner_id = ?")
+                        .bind(stake).bind(&mid).execute(&pool_y).await;
+                    let _ = sqlx::query("INSERT INTO ledger (miner_id, delta_mikro, neden, epoch, ts) VALUES (?, ?, 'teklif-iade', ?, ?)")
+                        .bind(&mid).bind(stake).bind(now).bind(now).execute(&pool_y).await;
+                    warn!("teklif vade dolumu: #{} (iade {} -> {})", tid, stake, mid);
                 }
                 // 2. Yeni yoklamalar uret (tur limiti).
                 for _ in 0..YOKLAMA_TUR_LIMIT {
@@ -3666,6 +4025,85 @@ mod tests {
             .unwrap()
             .0;
         assert!(resp2.get("gorevler").and_then(|v| v.as_array()).unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_teklif_yasam_dongusu() {
+        // B21: teklif ver -> kilit -> oncelikli supurme -> kapanis ucret+iade.
+        let state = test_state().await;
+        for (mid, tok) in [("m1", "t1"), ("m2", "t2")] {
+            sqlx::query("INSERT INTO miners (miner_id, token, cuzdan, makine_id, created_at, last_seen, coin_mikro) VALUES (?, ?, 'c', 'mk', 1, 9999999999, 100000)")
+                .bind(mid).bind(tok).execute(&state.pool).await.unwrap();
+        }
+        sqlx::query("CREATE TABLE madde (id INTEGER PRIMARY KEY, ozet TEXT)").execute(&state.wiki).await.unwrap();
+        for i in 1..=60i64 {
+            sqlx::query("INSERT INTO madde (id, ozet) VALUES (?, ?)")
+                .bind(i)
+                .bind(format!("teklif test maddesi {} sufficiently long text here", i))
+                .execute(&state.wiki).await.unwrap();
+        }
+        // m2 [1,40] araligini onerir (bos aralik).
+        let r = teklif_ver(
+            State(state.clone()),
+            test_headers("t2"),
+            Json(TeklifIstek { corpus: "test".to_string(), baslangic: 1, bitis: 40 }),
+        ).await.unwrap().0;
+        let tid = r.get("teklif_id").and_then(|v| v.as_i64()).unwrap();
+        assert_eq!(r.get("durum").and_then(|v| v.as_str()), Some("acik"));
+        // Stake kilitlendi (coin dustu + ledger negatif).
+        let coin: i64 = sqlx::query_scalar("SELECT coin_mikro FROM miners WHERE miner_id='m2'")
+            .fetch_one(&state.pool).await.unwrap();
+        assert_eq!(coin, 100000 - 500);
+        // Ayni aralik tekrar -> mevcut doner (yeni kilit yok).
+        let r2 = teklif_ver(
+            State(state.clone()),
+            test_headers("t2"),
+            Json(TeklifIstek { corpus: "test".to_string(), baslangic: 5, bitis: 30 }),
+        ).await.unwrap().0;
+        assert_eq!(r2.get("teklif_id").and_then(|v| v.as_i64()), Some(tid));
+        assert_eq!(r2.get("durum").and_then(|v| v.as_str()), Some("mevcut"));
+        let coin2: i64 = sqlx::query_scalar("SELECT coin_mikro FROM miners WHERE miner_id='m2'")
+            .fetch_one(&state.pool).await.unwrap();
+        assert_eq!(coin2, coin, "cift kilit olmamali");
+        // Supurme onceligi teklifi secer (ilk 20 kapsanmamis).
+        let sup = supurme_dene(&state, 1000).await.unwrap().expect("teklif supurmeli");
+        assert_eq!(sup.0, 1, "teklif araligindan baslamali");
+        assert_eq!(sup.1.len(), 20);
+        // Teklif araligindaki 2 batch'i m1 kapatir (40 kanit, kor eslemeli).
+        for (b, taban) in [(9001i64, 1i64), (9101, 21)] {
+            let gid = format!("test:5:{}", b);
+            sqlx::query("INSERT INTO gorevler (gorev_id, dagitilan_miner, corpus, offset, beklenen, alinan, durum, odul_mikro, ts) VALUES (?, 'm1', 'test', ?, 20, 0, 'acik', 0, 1)")
+                .bind(&gid).bind(taban).execute(&state.pool).await.unwrap();
+            for i in 0..20i64 {
+                sqlx::query("INSERT INTO kor_esleme (kor_id, madde_id, gorev_id, ts) VALUES (?, ?, ?, 1)")
+                    .bind(b + i).bind(taban + i).bind(&gid).execute(&state.pool).await.unwrap();
+            }
+            let vb = test_vektor(7);
+            for i in 0..20i64 {
+                kanit(
+                    State(state.clone()),
+                    test_headers("t1"),
+                    Json(KanitReq { gorev_id: gid.clone(), madde_id: b + i, v_int8_b64: vb.clone(), v_min: 0.0, v_max: 1.0, imza: None }),
+                ).await.unwrap();
+            }
+        }
+        // 40/40 kapandi -> teklif tamam + iade + bulucu payi.
+        let durum: String = sqlx::query_scalar("SELECT durum FROM teklifler WHERE id = ?")
+            .bind(tid).fetch_one(&state.pool).await.unwrap();
+        assert_eq!(durum, "tamam");
+        let odul: i64 = sqlx::query_scalar("SELECT COALESCE(SUM(delta_mikro),0) FROM ledger WHERE miner_id='m2' AND neden='teklif-odul'")
+            .fetch_one(&state.pool).await.unwrap();
+        assert!(odul > 0, "bulucu payi odenmeli");
+        let iade: i64 = sqlx::query_scalar("SELECT COALESCE(SUM(delta_mikro),0) FROM ledger WHERE miner_id='m2' AND neden='teklif-iade'")
+            .fetch_one(&state.pool).await.unwrap();
+        assert_eq!(iade, 500, "stake iade edilmeli");
+        // Kapali araliga yeni teklif RED.
+        let red = teklif_ver(
+            State(state.clone()),
+            test_headers("t1"),
+            Json(TeklifIstek { corpus: "test".to_string(), baslangic: 1, bitis: 40 }),
+        ).await;
+        assert!(red.is_err(), "kapali aralik reddedilmeli");
     }
 
     #[tokio::test]

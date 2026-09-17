@@ -110,6 +110,12 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-17: **Teklif protokolü v1 canlı (B21).** Tasarım `docs/TEKLIF-PROTOKOLU-TASARIM.md`.
+  Migration 014 (`teklifler`); `POST /api/teklif` (kapsama-reddi/stake-kilidi/
+  cift-yonlendirme), `GET /api/bosluklar`, `GET /api/tekliflerim`; supurme
+  onceligi (ATTACH'siz 3 sorgu); kapanista %1 bulucu payi + %80'de iade;
+  vadede iade (yoklama dongusu). Miner `teklif` + `bosluklar` komutlari.
+  Test 15/15 (tam yasam dongusu). Binary'ler `.20260917-teklif.bak`'ta.
 - 2026-09-17: **Claim-kirası canlı (B20).** `POST /api/kira/al`: tek kilit +
   tek wiki okuma + toplu kayitlarla N alt-gorev (blake3 kor, tek duyuru).
   Miner `--kira` ile kuyruktan calisir, bitince tazeler; dususte eski yol.

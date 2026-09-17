@@ -97,6 +97,28 @@ enum Commands {
         #[arg(long)]
         watch: bool,
     },
+    /// Bosluk teklifi ver (B21): kapsama eksigi araligi oner, stake kilitle.
+    Teklif {
+        #[arg(long, default_value = "http://127.0.0.1:8787")]
+        komuta: String,
+        /// Komuta tokeni. Verilmezse NEMES_TOKEN env veya ~/.nemes/token okunur.
+        #[arg(long, default_value = "")]
+        token: String,
+        #[arg(long)]
+        corpus: String,
+        #[arg(long)]
+        baslangic: i64,
+        #[arg(long)]
+        bitis: i64,
+    },
+    /// Bosluklari goster (B21): geri kalmis pencereler + acik teklifler.
+    Bosluklar {
+        #[arg(long, default_value = "http://127.0.0.1:8787")]
+        komuta: String,
+        /// Komuta tokeni. Verilmezse NEMES_TOKEN env veya ~/.nemes/token okunur.
+        #[arg(long, default_value = "")]
+        token: String,
+    },
     /// Sohbet (lokal GGUF)
     Chat {
         prompt: String,
@@ -175,6 +197,45 @@ async fn main() -> anyhow::Result<()> {
         Some(Commands::Chat { prompt, model }) => {
             println!("Chat: model={:?} prompt={}", model, prompt);
             println!("(lokal llama.cpp entegrasyonu yakında — şu an Tauri Chat sekmesini kullan)");
+        }
+        Some(Commands::Teklif { komuta, token, corpus, baslangic, bitis }) => {
+            let token = token_coz(&token)?;
+            let client = reqwest::Client::builder()
+                .user_agent(MINER_USER_AGENT)
+                .timeout(Duration::from_secs(15))
+                .build()?;
+            let r = client
+                .post(format!("{}/api/teklif", komuta.trim_end_matches('/')))
+                .header("Authorization", format!("Bearer {}", token))
+                .json(&serde_json::json!({ "corpus": corpus, "baslangic": baslangic, "bitis": bitis }))
+                .send()
+                .await?;
+            let s = r.status();
+            let j: serde_json::Value = r.json().await.unwrap_or(serde_json::Value::Null);
+            if !s.is_success() {
+                println!("teklif RED ({}): {}", s.as_u16(), j);
+            } else {
+                println!("teklif: {}", j);
+            }
+        }
+        Some(Commands::Bosluklar { komuta, token }) => {
+            let token = token_coz(&token)?;
+            let client = reqwest::Client::builder()
+                .user_agent(MINER_USER_AGENT)
+                .timeout(Duration::from_secs(15))
+                .build()?;
+            let r = client
+                .get(format!("{}/api/bosluklar", komuta.trim_end_matches('/')))
+                .header("Authorization", format!("Bearer {}", token))
+                .send()
+                .await?;
+            let s = r.status();
+            let j: serde_json::Value = r.json().await.unwrap_or(serde_json::Value::Null);
+            if !s.is_success() {
+                println!("bosluklar hata ({}): {}", s.as_u16(), j);
+            } else {
+                println!("{}", serde_json::to_string_pretty(&j).unwrap_or_default());
+            }
         }
         None => {
             // Argümansız → Full TUI mine başlat (xmrig gibi)

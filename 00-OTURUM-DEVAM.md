@@ -104,7 +104,7 @@ b1b3770 GPU geri | 26def41 GPU 300W
 - B18. KAPANDI ✅ (17 Eyl): WAN keşif v1 — kad+DHT protokolü, sabit kimlikler (komuta PeerId tohum-0), tohum bayrakları, test ispatlı. S3 (4003 modem) WAN'ı açar.
 - B19. KAPANDI ✅ (17 Eyl): demet gerçekten bağımsız (1.3G, kosinüs 1.0 ispatlı). :1251 kapalı (emir), S4 paketi hazır.
 - B20. KAPANDI ✅ (17 Eyl): kira canlı (unit-a kirada, dagitim 6x dustu, verim ayni). unit↔id capraz (a=523d3c47, b=a41b0d81).
-- B21. Teklif protokolü (YENİ, P2, tasarım): madenci öğrenme hedefi önerir (stake'li) → mesh yenilik/boşluk denetler → kabulde görevleşir. Kendi-kendine öğrenmenin kapısı.
+- B21. KAPANDI ✅ (17 Eyl): teklif v1 canlı (migration 014 + 3 uç + öncelik + pay/iade + miner komutları, test 15/15). İlk gerçek teklif operatörde.
 - B22. Uçta üretim döngüsü (YENİ, P3, Faz 2): GPU'lu madencide üret-tanıkla-damıt (öğretmen-küçük model, QLoRA), mesh mutabakatı. ERTELENEN damıtmanın mesh hali.
 - B11. Gece nöbeti (bu akşam): `gece-gozlem.sh` tekrar kurulsun mu — operatör onaylı varsayım, akşam sorulacak.
 
