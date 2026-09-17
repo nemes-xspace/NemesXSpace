@@ -1216,8 +1216,12 @@ async fn dagit_denetim(state: &Arc<AppState>, auditor: &str) -> Result<Option<Go
     }
 
     // Ayni denetciye iki kez gitmesin (son_denetci haric tutulur).
+    // 17 Eyl B5 dersi: kanarya sentetikleri (madde_id<0) wiki'de ozet'e sahip
+    // degildir; secime girerse tum dagitim bosa duser (refs bos -> Ok(None))
+    // ve kuyruk basi zehirlenir (16 Eyl 20:33 sonrasi 17 saat denetim OLDU).
+    // Sentetikler sizinti izidir, kalite denetimine tabi degildir.
     let mut secilen = sqlx::query(
-        "SELECT gorev_id, madde_id, miner_id FROM kanitlar WHERE spot_check = 1 AND dogrulama IS NULL AND miner_id != ? AND (son_denetci IS NULL OR son_denetci != ?) ORDER BY ts ASC LIMIT ?"
+        "SELECT gorev_id, madde_id, miner_id FROM kanitlar WHERE spot_check = 1 AND dogrulama IS NULL AND madde_id >= 0 AND miner_id != ? AND (son_denetci IS NULL OR son_denetci != ?) ORDER BY ts ASC LIMIT ?"
     )
     .bind(auditor)
     .bind(auditor)
@@ -1228,7 +1232,7 @@ async fn dagit_denetim(state: &Arc<AppState>, auditor: &str) -> Result<Option<Go
     if (secilen.len() as i64) < DENETIM_BATCH {
         let kalan = DENETIM_BATCH - secilen.len() as i64;
         let mut kendi = sqlx::query(
-            "SELECT gorev_id, madde_id, miner_id FROM kanitlar WHERE spot_check = 1 AND dogrulama IS NULL AND miner_id = ? AND (son_denetci IS NULL OR son_denetci != ?) ORDER BY ts ASC LIMIT ?"
+            "SELECT gorev_id, madde_id, miner_id FROM kanitlar WHERE spot_check = 1 AND dogrulama IS NULL AND madde_id >= 0 AND miner_id = ? AND (son_denetci IS NULL OR son_denetci != ?) ORDER BY ts ASC LIMIT ?"
         )
         .bind(auditor)
         .bind(auditor)
@@ -1393,7 +1397,10 @@ async fn kanit(
     }
 
     let now = current_epoch();
-    let spot = spot_check_gerekli(&state.pool, &req.gorev_id, madde_gercek).await;
+    // 17 Eyl B5: kanarya sentetikleri (madde_id<0) spot kuyruguna girmez.
+    // Gerekce: wiki'de ozetleri yoktur, denetlenemezler; secime girip kuyruk
+    // basini zehirliyorlardi. Odeme/kanit akisi aynen surer, sadece bayrak yok.
+    let spot = madde_gercek >= 0 && spot_check_gerekli(&state.pool, &req.gorev_id, madde_gercek).await;
 
     // Kaniti kaydet (anlik odul 0; odul batch tamamlaninca dagitilir).
     // Ic izlerde GERCEK id (supurme/denetim tutarliligi icin).

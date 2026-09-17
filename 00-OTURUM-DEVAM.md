@@ -72,9 +72,8 @@ Anahtar yollar:
 ## 4. SON COMMITLER (yeniler üstte; tam liste `git log` ile)
 
 ```
-(CALIŞMA DİZİNİ, commit bekliyor) 17 Eyl OOM duzeltmesi: yukle_havuz artimli
-  (komuta-rs/src/main.rs) + izleme dup->gunluk (nemes-testnet/izleme.py) +
-  beyin-sunucu killmode.conf + bu dosya | CANLI BINARY DEPLOY EDİLDİ 12:10 |
+(CALIŞMA DİZİNİ, commit bekliyor) 17 Eyl B5: kanarya zehiri (denetim secim
+  madde>=0 + sentetige spot yok; binary `.20260917-denetim.bak`, CANLIDA) |
 a02d493 hafiza (bu dosya+betik+garanti-8, PUSH BEKLIYOR) |
 43ee3ec deploy kaydi (PUSH BEKLIYOR) |
 144def0 B-1/BUG-1/B-3 kod (PUSH BEKLIYOR) |
@@ -83,22 +82,30 @@ b285836 arsiv (PUSH'LU) | c71fb4b cc100 kapanis (PUSH'LU) |
 b1b3770 GPU geri | 26def41 GPU 300W
 ```
 
-## 5. AÇIK İŞLER (16 Eyl 17:10 — sahip + boyuta göre)
+## 5. AÇIK İŞLER (17 Eyl 13:00 — sahip + boyuta göre; tam tarama)
 
 ### BENDEN (onaysız başlayabilirim)
 - B1. Üretim izleme: newscrawl kapanışlarında spot/escrow/ledger zinciri (pasif).
 - B2. Site Y1/Y3/Y5 uygulama (Y2+Y4 kelime onayı gelirse; site push token ister).
 - B3. komuta integration testleri (batch/escrow akışı `:memory:` DB'de).
-- B4. Ölü `izle*.sh` temizliği + DURUM periyodik tazeleme.
+- B4. DURUM.md periyodik tazeleme (başlık 16 Eyl'de kaldı; ölü `izle*.sh` 41d839b'de temizlendi).
+- B5. KAPANDI ✅ (17 Eyl): kanarya zehiri temizlendi — 20'lik denetim görevleri aktı, kuyruk -15.7K/sa eriyor.
+- B6. Defter toz eşiği (YENİ, P2): fark 195/200 mikro SABİT (akan sapma değil). `|fark|<1000` ise alarm yerine bilgi satırı önerisi (izleme.py tek satır).
+- B7. FAISS sayı satırı (YENİ, P3): dokümanda 24 yazıyor, canlıda 25 (25'inci: caselaw, 16 Eyl). 1 satırlık düzeltme.
+- B8. KAPANDI sayılır: `/api/arz` herkese açık doğrulandı (247 NEMES, 131732 batch); `/api/status` + `/api/denetim` token istiyor (tasarım, sorun yok).
+- B9. llama SIGTERM faili takibi (YENİ, pasif): 17 Eyl 12:10'da 3 sunucu SIGTERM ile düştü, fail bilinmiyor. Tekrarlarsa LMStudio/masaüstü izi sürülecek.
+- B10. komuta RSS tavan izleme (YENİ, pasif): şu an 4.9G sabit; >10G olursa havuz üst sınırı (cap) işi açılacak.
+- B11. Gece nöbeti (bu akşam): `gece-gozlem.sh` tekrar kurulsun mu — operatör onaylı varsayım, akşam sorulacak.
 
 ### SENDEN (operatör)
-- S1. Push tokeni (şu an 1 snapshot bekliyor).
-- S2. CF WAF-skip kuralı (`/api/*`, 2 dk).
+- S0. Token revoke (YENİ, GÜVENLİK, P0): dünkü 2 token + bugünkü hâlâ açıksa hepsi revoke edilecek. opencode.db'de düz metin duruyorlar.
+- S1. KAPANDI ✅ (17 Eyl: 17 commit pushlandı, önde 0).
+- S2. KAPANDI ✅ (16 Eyl: CF WAF-skip canlı doğrulandı `f7c310d`).
 - S3. 4003 modem yönlendirme (tam mesh katılımı).
-- S4. Gerçek dış makineden miner provası (WAF sonrası).
+- S4. Gerçek dış makineden miner provası (WAF koşulu kalktı — WAF canlı, doğrudan yapılabilir).
 - S5. v1.2 onayı (imza belgen).
-- S6. Site Y2+Y4 kelime onayı.
-- S7. Avukat randevusu (0.9) + emanetçi/GDPR kararları.
+- S6. Site Y2+Y4 kelime onayı (Y2 kapsam kilidine takılıyor — yayınlanmayacaksa kapatılacak).
+- S7. Avukat randevusu (0.9) + emanetçi/GDPR kararları (4 taslak `docs/`da onay bekliyor).
 - S8. Windows .exe/EV + H motoru (ilk ödeyen müşteri).
 
 ### BLOKELİ (dış bağımlılık)
@@ -109,7 +116,9 @@ b1b3770 GPU geri | 26def41 GPU 300W
 ### KAPANDI (bu hafta)
 cc100 109M ✅ | merge+FAISS-24 ✅ | arşiv 161G ✅ | B-1→B-5+BUG-1/2 ✅ |
 E2E ✅ | localhost bind ✅ | miner UA ✅ | sıra timer ✅ | hafıza+tatbikat ✅ |
-localhost-only ✅ | Dalga A (caselaw→newscrawl kesimi) ✅ | site miner paketi ✅
+localhost-only ✅ | Dalga A (caselaw→newscrawl kesimi) ✅ | site miner paketi ✅ |
+WAF-skip ✅ | push (17 commit) ✅ | **komuta OOM (artımlı havuz, 17 Eyl)** ✅ |
+**llama kurtarma + KillMode (17 Eyl)** ✅ | **izleme hafifletme (17 Eyl)** ✅ |
 
 ## 6. KARAR DEFTERİ (değişmez kayıt)
 

@@ -110,6 +110,14 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-17: **Denetim kuyruk zehirlenmesi çözüldü (B5).** 16 Eyl 20:33'ten beri
+  17 saat denetim dağıtımı YOKTU (kuyruk 175K+). Kök neden: kanarya sentetikleri
+  (madde_id<0, Güvenlik Md.3) kuyruk başına dizilmişti; `dagit_denetim` wiki'de
+  ozet bulamayınca refs boş dönüp sessizce None veriyordu (zehirli-kuyruk-başı).
+  Düzeltme: secimlere `madde_id>=0` + kanıt girişinde sentetiğe spot bayrağı yok
+  (ödeme akışı aynı). Sonuç: 20'lik tam denetim görevleri + Hepsi `gecti`
+  (cos≥0.997), kuyruk -15.7K/sa eriyor (~11 saatte sıfırlanır). Binary
+  `.20260917-denetim.bak`'ta. Test 11/11.
 - 2026-09-16: **Ölçek-1 deploy edildi.** Kilit metriği (500ms warn + 1000'de
   ortalama) + WAL/NORMAL/30sn-timeout + stres tablosu (`docs/TOKENOMIK-STRES.md`).
   Canlıda -wal/-shm doğrulandı, batch'ler kapanıyor. Komuta DB 2.6G (üretim
