@@ -110,6 +110,12 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-17: **Integration testleri (B3).** Router `app_router()`'a çıkarıldı;
+  ephemeral-port iskelesiyle 3 HTTP turu: iskelet (health/404/auth), kira uçtan
+  uca (kapanış+korunum), denetim turu (bayrak→görev→sonuç→doğrulama). Test
+  18/18 (4 tur stabil). Yan ürün: `dagit_denetim` wiki'yi state havuzundan
+  kullanıyor (cagri-basi baglanti curufesi bitti; ayni veri). Canlıda
+  doğrulandı (20'lik denetimler akıyor). Binary `.20260917-b3.bak`'ta.
 - 2026-09-17: **Teklif protokolü v1 canlı (B21).** Tasarım `docs/TEKLIF-PROTOKOLU-TASARIM.md`.
   Migration 014 (`teklifler`); `POST /api/teklif` (kapsama-reddi/stake-kilidi/
   cift-yonlendirme), `GET /api/bosluklar`, `GET /api/tekliflerim`; supurme

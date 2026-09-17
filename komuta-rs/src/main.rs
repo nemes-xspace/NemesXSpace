@@ -1817,13 +1817,19 @@ async fn dagit_denetim(state: &Arc<AppState>, auditor: &str) -> Result<Option<Go
             ilk_corpus = corpus.clone();
         }
         if !havuzlar.contains_key(&corpus) {
-            let wiki_path = format!("/srv/beyin/wiki/wiki_{}.db", corpus);
-            let db = SqlitePoolOptions::new()
-                .max_connections(1)
-                .connect(&format!("sqlite:{}?mode=ro", wiki_path))
-                .await
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("wiki db: {}", e)))?;
-            havuzlar.insert(corpus.clone(), db);
+            // Ayni corpus state havuzundaysa yeni baglanti acma (B3: testte
+            // :memory: wiki calisir; uretimde baglanti curufesi azalir).
+            if corpus == state.corpus {
+                havuzlar.insert(corpus.clone(), state.wiki.clone());
+            } else {
+                let wiki_path = format!("/srv/beyin/wiki/wiki_{}.db", corpus);
+                let db = SqlitePoolOptions::new()
+                    .max_connections(1)
+                    .connect(&format!("sqlite:{}?mode=ro", wiki_path))
+                    .await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, format!("wiki db: {}", e)))?;
+                havuzlar.insert(corpus.clone(), db);
+            }
         }
         let db = havuzlar.get(&corpus).unwrap();
         let srow = sqlx::query("SELECT ozet FROM madde WHERE id = ?")
@@ -3256,6 +3262,42 @@ async fn komut(
 
 // --- Main ---
 
+/// HTTP yonlendirme tablosu (B3: entegrasyon testleri canliyla ayni tabloyu kullanir).
+fn app_router(state: Arc<AppState>) -> Router {
+    Router::new()
+        .route("/health", get(health))
+        .route("/api/kayit", post(register))
+        .route("/api/heartbeat", post(heartbeat))
+        .route("/api/gorev", get(gorev))
+        .route("/api/kira/al", post(kira_al))
+        .route("/api/teklif", post(teklif_ver))
+        .route("/api/bosluklar", get(bosluklar))
+        .route("/api/tekliflerim", get(tekliflerim))
+        .route("/api/kanit", post(kanit))
+        .route("/api/kanit/toplu", post(kanit_toplu))
+        .route("/api/status", get(status))
+        .route("/api/bakiye", get(bakiye))
+        .route("/api/arz", get(arz))
+        .route("/api/ledger", get(ledger))
+        .route("/api/komut", post(komut))
+        .route("/api/denetim", get(denetim_liste))
+        .route("/api/denetim/sonuc", post(denetim_sonuc))
+        .route("/api/metin/:kor", get(metin))
+        .route("/api/kanarya/kontrol", get(kanarya_kontrol))
+        .route("/api/shard/ilan", post(shard_ilan))
+        .route("/api/shard", get(shard_liste))
+        .route("/api/ara", post(ara))
+        .route("/api/ara", get(ara_get))
+        .route("/api/parca/tohum", post(parca_tohum))
+        .route("/api/parca/indir/:hash", get(parca_indir))
+        .route("/api/depolama/yoklama", get(yoklama_al))
+        .route("/api/depolama/yoklama/sonuc", post(yoklama_sonuc))
+        .route("/api/depolama/yoklama/uret", post(yoklama_uret_endpoint))
+        .layer(CorsLayer::permissive())
+        .layer(TraceLayer::new_for_http())
+        .with_state(state)
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
@@ -3412,38 +3454,7 @@ async fn main() -> anyhow::Result<()> {
     });
     info!("Parca relay: {} | yedek: {}", relay_dir, yedek_dir);
 
-    let app = Router::new()
-        .route("/health", get(health))
-        .route("/api/kayit", post(register))
-        .route("/api/heartbeat", post(heartbeat))
-        .route("/api/gorev", get(gorev))
-        .route("/api/kira/al", post(kira_al))
-        .route("/api/teklif", post(teklif_ver))
-        .route("/api/bosluklar", get(bosluklar))
-        .route("/api/tekliflerim", get(tekliflerim))
-        .route("/api/kanit", post(kanit))
-        .route("/api/kanit/toplu", post(kanit_toplu))
-        .route("/api/status", get(status))
-        .route("/api/bakiye", get(bakiye))
-        .route("/api/arz", get(arz))
-        .route("/api/ledger", get(ledger))
-        .route("/api/komut", post(komut))
-        .route("/api/denetim", get(denetim_liste))
-        .route("/api/denetim/sonuc", post(denetim_sonuc))
-        .route("/api/metin/:kor", get(metin))
-        .route("/api/kanarya/kontrol", get(kanarya_kontrol))
-        .route("/api/shard/ilan", post(shard_ilan))
-        .route("/api/shard", get(shard_liste))
-        .route("/api/ara", post(ara))
-        .route("/api/ara", get(ara_get))
-        .route("/api/parca/tohum", post(parca_tohum))
-        .route("/api/parca/indir/:hash", get(parca_indir))
-        .route("/api/depolama/yoklama", get(yoklama_al))
-        .route("/api/depolama/yoklama/sonuc", post(yoklama_sonuc))
-        .route("/api/depolama/yoklama/uret", post(yoklama_uret_endpoint))
-        .layer(CorsLayer::permissive())
-        .layer(TraceLayer::new_for_http())
-        .with_state(state.clone());
+    let app = app_router(state.clone());
 
     // Gossip abonesi: nemes/shard ilanlarini dinler, deftere isler.
     // HTTP API'dan bagimsiz gorevde kosar; duserse API etkilenmez.
@@ -4104,6 +4115,281 @@ mod tests {
             Json(TeklifIstek { corpus: "test".to_string(), baslangic: 1, bitis: 40 }),
         ).await;
         assert!(red.is_err(), "kapali aralik reddedilmeli");
+    }
+
+    /// B3 entegrasyon iskelesi: gercek HTTP yigini (ephemeral port).
+    /// Donen: (taban_url, paylasilan_state).
+    async fn test_sunucu() -> (String, std::sync::Arc<AppState>) {
+        let state = test_state().await;
+        sqlx::query("CREATE TABLE madde (id INTEGER PRIMARY KEY, ozet TEXT)")
+            .execute(&state.wiki)
+            .await
+            .unwrap();
+        for i in 1..=60i64 {
+            sqlx::query("INSERT INTO madde (id, ozet) VALUES (?, ?)")
+                .bind(i)
+                .bind(format!("entegrasyon test maddesi {} sufficiently long text here", i))
+                .execute(&state.wiki)
+                .await
+                .unwrap();
+        }
+        let app = app_router(state.clone());
+        let dinleyici = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let adres = dinleyici.local_addr().unwrap();
+        tokio::spawn(async move {
+            axum::serve(dinleyici, app).await.unwrap();
+        });
+        (format!("http://{}", adres), state)
+    }
+
+    fn test_istemci() -> reqwest::Client {
+        reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(10))
+            .build()
+            .unwrap()
+    }
+
+    async fn test_kayit(
+        istemci: &reqwest::Client,
+        taban: &str,
+        cuzdan: &str,
+    ) -> String {
+        let r = istemci
+            .post(format!("{}/api/kayit", taban))
+            .json(&serde_json::json!({ "cuzdan": cuzdan, "makine_id": "test-makine" }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(r.status(), 200);
+        let j: serde_json::Value = r.json().await.unwrap();
+        j.get("token").and_then(|v| v.as_str()).unwrap().to_string()
+    }
+
+    #[tokio::test]
+    async fn test_http_iskelet() {
+        // B3: kablo canli mi? /health + 404 + auth kapisi.
+        let (taban, _state) = test_sunucu().await;
+        let istemci = test_istemci();
+        let r = istemci.get(format!("{}/health", taban)).send().await.unwrap();
+        assert_eq!(r.status(), 200);
+        let j: serde_json::Value = r.json().await.unwrap();
+        assert_eq!(j.get("ok").and_then(|v| v.as_bool()), Some(true));
+        // Bilinmeyen yol 404.
+        let r = istemci.get(format!("{}/api/yok-boyle-uc", taban)).send().await.unwrap();
+        assert_eq!(r.status(), 404);
+        // Tokensiz status 401.
+        let r = istemci.get(format!("{}/api/status", taban)).send().await.unwrap();
+        assert_eq!(r.status(), 401);
+        // Kayit acik (tokensiz) ve token uretir.
+        let tok = test_kayit(&istemci, &taban, "cuzdan-a").await;
+        assert!(!tok.is_empty());
+        // Tokenli status 200 + alanlar.
+        let r = istemci
+            .get(format!("{}/api/status", taban))
+            .header("Authorization", format!("Bearer {}", tok))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(r.status(), 200);
+        let j: serde_json::Value = r.json().await.unwrap();
+        assert!(j.get("miner_id").and_then(|v| v.as_str()).is_some());
+        assert!(j.get("coin_mikro").is_some());
+    }
+
+    #[tokio::test]
+    async fn test_http_uctan_uca_kira() {
+        // B3: kayit -> kira -> toplu kanit -> kapanis -> odul korunumu (HTTP).
+        let (taban, state) = test_sunucu().await;
+        let istemci = test_istemci();
+        let tok = test_kayit(&istemci, &taban, "cuzdan-a").await;
+        let auth = format!("Bearer {}", tok);
+        // Kira: 40 madde = 2 alt-gorev.
+        let r = istemci
+            .post(format!("{}/api/kira/al", taban))
+            .header("Authorization", auth.clone())
+            .json(&serde_json::json!({ "adet": 40 }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(r.status(), 200);
+        let j: serde_json::Value = r.json().await.unwrap();
+        let gorevler = j.get("gorevler").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(gorevler.len(), 2);
+        // Ilk alt-gorevin kor ID'leriyle toplu kanit.
+        let ilk = &gorevler[0];
+        let gid = ilk.get("id").and_then(|v| v.as_str()).unwrap();
+        let korlar: Vec<i64> = ilk
+            .get("payload")
+            .and_then(|p| p.get("madde_idler"))
+            .and_then(|v| v.as_array())
+            .unwrap()
+            .iter()
+            .filter_map(|v| v.as_i64())
+            .collect();
+        assert_eq!(korlar.len(), 20);
+        let vb = test_vektor(7);
+        let kalemler: Vec<serde_json::Value> = korlar
+            .iter()
+            .map(|k| {
+                serde_json::json!({ "gorev_id": gid, "madde_id": k, "v_int8_b64": vb, "v_min": 0.0, "v_max": 1.0, "imza": null })
+            })
+            .collect();
+        let r = istemci
+            .post(format!("{}/api/kanit/toplu", taban))
+            .header("Authorization", auth.clone())
+            .json(&kalemler)
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(r.status(), 200);
+        let j: serde_json::Value = r.json().await.unwrap();
+        let sonuclar = j.get("sonuclar").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(sonuclar.len(), 20);
+        assert!(sonuclar.iter().all(|s| s.get("kabul").and_then(|x| x.as_bool()) == Some(true)));
+        assert!(sonuclar.iter().any(|s| s.get("batch_tamam").and_then(|x| x.as_bool()) == Some(true)));
+        // Odul korunumu DB'den dogrula.
+        let odenen: i64 = sqlx::query_scalar("SELECT COALESCE(SUM(coin_mikro),0) FROM miners")
+            .fetch_one(&state.pool)
+            .await
+            .unwrap();
+        let emanet: i64 = sqlx::query_scalar("SELECT COALESCE(SUM(miktar_mikro),0) FROM escrow")
+            .fetch_one(&state.pool)
+            .await
+            .unwrap();
+        assert_eq!(odenen + emanet, 2000);
+    }
+
+    #[tokio::test]
+    async fn test_http_denetim_turu() {
+        // B3: bayrakli kanit -> denetim gorevi (HTTP poll) -> sonuc -> dogrulama.
+        let (taban, state) = test_sunucu().await;
+        let istemci = test_istemci();
+        let t1 = test_kayit(&istemci, &taban, "cuzdan-a").await;
+        let t2 = test_kayit(&istemci, &taban, "cuzdan-b").await;
+        // m1 kira ile 20 kanit basar (icinden bayrakli cikar).
+        let r = istemci
+            .post(format!("{}/api/kira/al", taban))
+            .header("Authorization", format!("Bearer {}", t1))
+            .json(&serde_json::json!({ "adet": 20 }))
+            .send()
+            .await
+            .unwrap();
+        assert_eq!(r.status(), 200);
+        let j: serde_json::Value = r.json().await.unwrap();
+        let gorevler = j.get("gorevler").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(gorevler.len(), 1);
+        let gid = gorevler[0].get("id").and_then(|v| v.as_str()).unwrap().to_string();
+        let korlar: Vec<i64> = gorevler[0]
+            .get("payload")
+            .and_then(|p| p.get("madde_idler"))
+            .and_then(|v| v.as_array())
+            .unwrap()
+            .iter()
+            .filter_map(|v| v.as_i64())
+            .collect();
+        let vb = test_vektor(7);
+        // Bayrak birikene kadar kira+kanit turu (spot %10 zar: tur basi ~1/3
+        // olasilikla >=3 bayrak; 6 turda kacirma olasiligi ihmal edilir).
+        // Her turda farkli gorev (kor cakismasi yok).
+        let mut tur = 0;
+        let bayrakli: i64 = loop {
+            tur += 1;
+            assert!(tur <= 6, "bayrak birikmedi");
+            let r = istemci
+                .post(format!("{}/api/kira/al", taban))
+                .header("Authorization", format!("Bearer {}", t1))
+                .json(&serde_json::json!({ "adet": 20 }))
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(r.status(), 200);
+            let j: serde_json::Value = r.json().await.unwrap();
+            let gs = j.get("gorevler").and_then(|v| v.as_array()).unwrap();
+            assert_eq!(gs.len(), 1);
+            let gid = gs[0].get("id").and_then(|v| v.as_str()).unwrap().to_string();
+            let korlar: Vec<i64> = gs[0]
+                .get("payload")
+                .and_then(|p| p.get("madde_idler"))
+                .and_then(|v| v.as_array())
+                .unwrap()
+                .iter()
+                .filter_map(|v| v.as_i64())
+                .collect();
+            let kalemler: Vec<serde_json::Value> = korlar
+                .iter()
+                .map(|k| {
+                    serde_json::json!({ "gorev_id": gid, "madde_id": k, "v_int8_b64": vb, "v_min": 0.0, "v_max": 1.0, "imza": null })
+                })
+                .collect();
+            let r = istemci
+                .post(format!("{}/api/kanit/toplu", taban))
+                .header("Authorization", format!("Bearer {}", t1))
+                .json(&kalemler)
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(r.status(), 200);
+            let n: i64 = sqlx::query_scalar(
+                "SELECT COUNT(*) FROM kanitlar WHERE spot_check = 1 AND dogrulama IS NULL",
+            )
+            .fetch_one(&state.pool)
+            .await
+            .unwrap();
+            if n >= 3 {
+                break n;
+            }
+        };
+        assert!(bayrakli >= 3);
+        // m2 denetim gorevi yakalayana kadar yokla (1/5 sans, 80 deneme).
+        let mut denetim: Option<serde_json::Value> = None;
+        for _ in 0..80 {
+            let r = istemci
+                .get(format!("{}/api/gorev", taban))
+                .header("Authorization", format!("Bearer {}", t2))
+                .send()
+                .await
+                .unwrap();
+            if r.status() == 200 {
+                let g: serde_json::Value = r.json().await.unwrap();
+                if g.get("tip").and_then(|v| v.as_str()) == Some("denetim") {
+                    denetim = Some(g);
+                    break;
+                }
+            }
+        }
+        let denetim = denetim.expect("80 yoklamada denetim gorevi gelmeli");
+        let refs = denetim
+            .get("payload")
+            .and_then(|p| p.get("denetim"))
+            .and_then(|v| v.as_array())
+            .unwrap();
+        assert!(!refs.is_empty());
+        // Ayni vektorle sonuclari bas: hepsi gecmeli.
+        let mut gecen = 0;
+        for rf in refs {
+            let rg = rf.get("gorev_id").and_then(|v| v.as_str()).unwrap();
+            let rm = rf.get("madde_id").and_then(|v| v.as_i64()).unwrap();
+            let r = istemci
+                .post(format!("{}/api/denetim/sonuc", taban))
+                .header("Authorization", format!("Bearer {}", t2))
+                .json(&serde_json::json!({ "gorev_id": rg, "madde_id": rm, "v_int8_b64": vb, "v_min": 0.0, "v_max": 1.0 }))
+                .send()
+                .await
+                .unwrap();
+            assert_eq!(r.status(), 200);
+            let j: serde_json::Value = r.json().await.unwrap();
+            if j.get("gecerli").and_then(|v| v.as_bool()) == Some(true) {
+                gecen += 1;
+            }
+        }
+        assert_eq!(gecen, refs.len(), "denetimler gecmeli");
+        // Dogrulama DB'ye islendi.
+        let dogrulanan: i64 =
+            sqlx::query_scalar("SELECT COUNT(*) FROM kanitlar WHERE dogrulama IS NOT NULL")
+                .fetch_one(&state.pool)
+                .await
+                .unwrap();
+        assert!(dogrulanan > 0);
     }
 
     #[tokio::test]

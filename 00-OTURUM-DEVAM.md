@@ -87,7 +87,7 @@ b1b3770 GPU geri | 26def41 GPU 300W
 ### BENDEN (onaysız başlayabilirim)
 - B1. Üretim izleme: newscrawl kapanışlarında spot/escrow/ledger zinciri (pasif).
 - B2. KAPANDI ✅ (17 Eyl): Y1/Y3/Y5 site reposunda hazır (`57c7efa`, push bekliyor). Y2 kilitli (dokunulmadı).
-- B3. komuta integration testleri (batch/escrow akışı `:memory:` DB'de).
+- B3. KAPANDI ✅ (17 Eyl): HTTP entegrasyon (3 tur, 18/18 stabil) + wiki havuz iyileştirmesi, canlıda.
 - B4. DURUM.md periyodik tazeleme (başlık 16 Eyl'de kaldı; ölü `izle*.sh` 41d839b'de temizlendi).
 - B5. KAPANDI ✅ (17 Eyl): kanarya zehiri temizlendi — 20'lik denetim görevleri aktı, kuyruk -15.7K/sa eriyor.
 - B6. Defter toz eşiği (YENİ, P2): fark 195/200 mikro SABİT (akan sapma değil). `|fark|<1000` ise alarm yerine bilgi satırı önerisi (izleme.py tek satır).
