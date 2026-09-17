@@ -783,6 +783,15 @@ struct HeartbeatParca {
 struct HeartbeatReq {
     parcalar: Option<Vec<HeartbeatParca>>,
     depolama_kota: Option<i64>,
+    /// B23 kabiliyet ilani (heterojen mesh): donanim + roller.
+    yetenek: Option<HeartbeatYetenek>,
+}
+
+#[derive(Debug, Deserialize)]
+struct HeartbeatYetenek {
+    gpu_ad: Option<String>,
+    vram_mb: Option<i64>,
+    roller: Option<Vec<String>>,
 }
 
 async fn heartbeat(
@@ -811,6 +820,37 @@ async fn heartbeat(
                     .await
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
             }
+        }
+        // B23 kabiliyet ilani: donanim + roller kaydi (upsert; sinirli uzunluk).
+        // Gondermeyen eski miner'lar etkilenmez (satir acilmaz).
+        if let Some(y) = req.yetenek {
+            let gpu: String = y.gpu_ad.unwrap_or_default().chars().take(120).collect();
+            let vram = y.vram_mb.unwrap_or(0).clamp(0, 1 << 30);
+            let mut roller: Vec<String> = y
+                .roller
+                .unwrap_or_default()
+                .into_iter()
+                .map(|r| r.chars().take(24).collect::<String>())
+                .filter(|r| !r.is_empty())
+                .take(8)
+                .collect();
+            roller.sort();
+            roller.dedup();
+            if roller.is_empty() {
+                roller.push("embed".to_string());
+            }
+            let rol_str = roller.join(",");
+            sqlx::query(
+                "INSERT INTO miner_yetenek (miner_id, gpu_ad, vram_mb, roller, ts) VALUES (?, ?, ?, ?, ?) ON CONFLICT(miner_id) DO UPDATE SET gpu_ad = excluded.gpu_ad, vram_mb = excluded.vram_mb, roller = excluded.roller, ts = excluded.ts"
+            )
+            .bind(&miner_id)
+            .bind(&gpu)
+            .bind(vram)
+            .bind(&rol_str)
+            .bind(now)
+            .execute(&state.pool)
+            .await
+            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         }
         // Parça canlılık raporu: yer bilgisini tazele (ölüm ilanı C7'de okur).
         if let Some(parcalar) = req.parcalar {
@@ -2356,6 +2396,45 @@ async fn kanit(
     }))
 }
 
+/// Filo gorunumu (B23): madenciler + kabiliyet + canlilik (operator planlamasi).
+async fn filo(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let _miner_id = token_dogrula(&headers, &state.pool).await?;
+    let now = current_epoch();
+    let rows = sqlx::query(
+        "SELECT m.miner_id, m.pay, m.coin_mikro, m.strike, m.itibar, m.last_seen, m.depolama_kota, y.gpu_ad, y.vram_mb, y.roller FROM miners m LEFT JOIN miner_yetenek y ON y.miner_id = m.miner_id ORDER BY m.pay DESC LIMIT 10000",
+    )
+    .fetch_all(&state.pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let liste: Vec<serde_json::Value> = rows
+        .iter()
+        .map(|r| {
+            let mid: String = r.get("miner_id");
+            let pay: i64 = r.get("pay");
+            let coin: i64 = r.get("coin_mikro");
+            let strike: i64 = r.get("strike");
+            let itibar: i64 = r.get("itibar");
+            let goruldu: i64 = r.get("last_seen");
+            let kota: i64 = r.get("depolama_kota");
+            let gpu: Option<String> = r.get("gpu_ad");
+            let vram: Option<i64> = r.get("vram_mb");
+            let roller: Option<String> = r.get("roller");
+            serde_json::json!({
+                "miner_id": mid, "pay": pay, "coin_mikro": coin,
+                "strike": strike, "itibar": itibar,
+                "son_nabiz_sn_once": (now - goruldu).max(0),
+                "depolama_kota": kota,
+                "gpu": gpu.unwrap_or_default(), "vram_mb": vram.unwrap_or(0),
+                "roller": roller.unwrap_or_default(),
+            })
+        })
+        .collect();
+    Ok(Json(serde_json::json!({ "madenci": liste, "sayi": liste.len() })))
+}
+
 async fn status(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
@@ -3276,6 +3355,7 @@ fn app_router(state: Arc<AppState>) -> Router {
         .route("/api/kanit", post(kanit))
         .route("/api/kanit/toplu", post(kanit_toplu))
         .route("/api/status", get(status))
+        .route("/api/filo", get(filo))
         .route("/api/bakiye", get(bakiye))
         .route("/api/arz", get(arz))
         .route("/api/ledger", get(ledger))
@@ -4390,6 +4470,43 @@ mod tests {
                 .await
                 .unwrap();
         assert!(dogrulanan > 0);
+    }
+
+    #[tokio::test]
+    async fn test_yetenek_yasam_dongusu() {
+        // B23: nabizla kabiliyet kaydi + guncelleme + filo gorunumu.
+        let state = test_state().await;
+        sqlx::query("INSERT INTO miners (miner_id, token, cuzdan, makine_id, created_at, last_seen) VALUES ('m1', 't1', 'c', 'mk', 1, 9999999999)")
+            .execute(&state.pool).await.unwrap();
+        // Yetenekli nabiz.
+        let r = heartbeat(
+            State(state.clone()),
+            test_headers("t1"),
+            Some(Json(serde_json::from_value(serde_json::json!({
+                "parcalar": [], "depolama_kota": 100,
+                "yetenek": { "gpu_ad": "Test GPU 11G", "vram_mb": 11264,
+                    "roller": ["uretim", "embed", "uretim"] }
+            })).unwrap())),
+        ).await.unwrap();
+        assert!(r.get("ok").and_then(|v| v.as_bool()) == Some(true));
+        let row: (String, i64, String) = sqlx::query_as(
+            "SELECT gpu_ad, vram_mb, roller FROM miner_yetenek WHERE miner_id = 'm1'",
+        )
+        .fetch_one(&state.pool).await.unwrap();
+        assert_eq!(row.0, "Test GPU 11G");
+        assert_eq!(row.1, 11264);
+        assert_eq!(row.2, "embed,uretim", "sirali + tekrarsiz");
+        // Eski nabiz (yeteneksiz) satiri bozmaz.
+        heartbeat(State(state.clone()), test_headers("t1"), None).await.unwrap();
+        let sayi: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM miner_yetenek WHERE miner_id = 'm1'")
+            .fetch_one(&state.pool).await.unwrap();
+        assert_eq!(sayi, 1);
+        // Filo listeler.
+        let f = filo(State(state.clone()), test_headers("t1")).await.unwrap();
+        let liste = f.get("madenci").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(liste.len(), 1);
+        assert_eq!(liste[0].get("gpu").and_then(|v| v.as_str()), Some("Test GPU 11G"));
+        assert_eq!(liste[0].get("roller").and_then(|v| v.as_str()), Some("embed,uretim"));
     }
 
     #[tokio::test]

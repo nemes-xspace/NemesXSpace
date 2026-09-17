@@ -575,10 +575,30 @@ async fn simple_mine(_gpu: &str, komuta: &str, token: &str, embed_api: &str, mod
                 }
                 None => (Vec::new(), None),
             };
+            // B23 kabiliyet ilani: GPU/VRAM + roller (heterojen mesh eslesmesi).
+            let gpu_bilgi = miner_core::resources::get_gpu_info();
+            let vram_mb: i64 = gpu_bilgi
+                .vram_toplam
+                .split_whitespace()
+                .next()
+                .and_then(|s| s.parse::<i64>().ok())
+                .unwrap_or(0);
+            let mut roller = vec!["embed".to_string(), "denetim".to_string()];
+            if dep_taahhut.is_some() {
+                roller.push("depolama".to_string());
+            }
+            if vram_mb >= 4096 {
+                roller.push("uretim".to_string());
+            }
+            let yetenek = serde_json::json!({
+                "gpu_ad": gpu_bilgi.ad.chars().take(120).collect::<String>(),
+                "vram_mb": vram_mb,
+                "roller": roller,
+            });
             match shard_http
                 .post(format!("{}/api/heartbeat", komuta.trim_end_matches('/')))
                 .header("Authorization", format!("Bearer {}", token))
-                .json(&serde_json::json!({"parcalar": parcalar, "depolama_kota": kota}))
+                .json(&serde_json::json!({"parcalar": parcalar, "depolama_kota": kota, "yetenek": yetenek}))
                 .send()
                 .await
             {

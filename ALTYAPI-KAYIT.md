@@ -110,6 +110,11 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-17: **Kabiliyet ilanı canlı (B23).** Migration 015 (`miner_yetenek`);
+  nabızda `yetenek` (GPU/VRAM/roller, sinirli); `GET /api/filo` filo gorunumu.
+  Canlı: 2 madenci "GTX 1080 Ti 11G embed,denetim,depolama,uretim" bildiriyor;
+  win satirsiz (eski nabiz, uyumlu). Eslesme (gorev-sinifi yonlendirme) ilk
+  metin-disi gorevde (B23b). Binary'ler `.20260917-yetenek.bak`'ta. Test 19/19.
 - 2026-09-17: **Gece nöbeti kuruldu (21:41) + kanarya emanet toplu tasfiye.**
   Kalan 365 kanarya emaneti de serbest bırakıldı (34.697 mikro, 3 madenci;
   kopya `/tmp/emanet-kanarya-tumu.sql`de, defter tozu sabit). Nöbet betiği
