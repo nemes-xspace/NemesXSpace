@@ -110,6 +110,24 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-17: **Shard-claim disiplini (B13).** Tablo çürümüştü: 9 "aktif" ilanın
+  8'i bayattı, hepsi donuk tr cursor'una (4724762) yığılmıştı; miner `--corpus tr`
+  bayrağı mesh ilanlarını yanlış etiketliyordu (komuta newscrawl sunarken).
+  Düzeltme: a/b unitlerinde `--corpus newscrawl_tr` (drop-in `z-*`, token.conf
+  sonrası; yalnızca ilan etiketini etkiler). Sonuç: ilanlar canlı cursor'a
+  (1.72M) çıpalandı, aktif→tukendi döngüsü işliyor. Ölçüm: gorev ~2.3/sn
+  (0.76/miner/sn; 30K projeksiyonu ~23K/sn — federasyon eşiği), kilit ort 0ms
+  (metrik 16 Eyl'den canlı, 500ms warn eşiği). Bayat satırlar silinmedi (ölçüsüz,
+  okuma-anında expiry yeterli).
+- 2026-09-17: **İlk canlı mesh (B12 provası, miner-b).** `--p2p-dinle` tek miner'da
+  açıldı (drop-in `z-p2p-prova.conf`, token.conf sonrası; a+win poll devam).
+  Kanıt: mDNS discovery çift yönlü + 29 `connected` + gossipsub `nemes/gorev`
+  aboneliği (kod) + dinleyici `◈ gorev duyurusu dinleniyor`. Üretim kesintisiz
+  (0 hata). Dersler: (1) ShardRelay+P2PNode aynı `--p2p-port`u paylaşamaz
+  (sabit port çakışır, hata iletisi boş — küçük log ayıbı); `0` (rastgele) kullan.
+  (2) drop-in sırası: token.conf'u ezmek için `z-` öneki. (3) idle→uyanma yolu
+  gözlenemedi (görev bolken miner hiç boş kalmıyor) — mekanizma kod-doğrulamalı,
+  ilk kıtlıkta journal'dan teyit edilecek. Dinleyici AÇIK bırakıldı (mesh tohumu).
 - 2026-09-17: **Denetim kuyruk zehirlenmesi çözüldü (B5).** 16 Eyl 20:33'ten beri
   17 saat denetim dağıtımı YOKTU (kuyruk 175K+). Kök neden: kanarya sentetikleri
   (madde_id<0, Güvenlik Md.3) kuyruk başına dizilmişti; `dagit_denetim` wiki'de

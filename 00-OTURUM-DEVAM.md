@@ -95,6 +95,12 @@ b1b3770 GPU geri | 26def41 GPU 300W
 - B8. KAPANDI sayılır: `/api/arz` herkese açık doğrulandı (247 NEMES, 131732 batch); `/api/status` + `/api/denetim` token istiyor (tasarım, sorun yok).
 - B9. llama SIGTERM faili takibi (YENİ, pasif): 17 Eyl 12:10'da 3 sunucu SIGTERM ile düştü, fail bilinmiyor. Tekrarlarsa LMStudio/masaüstü izi sürülecek.
 - B10. komuta RSS tavan izleme (YENİ, pasif): şu an 4.9G sabit; >10G olursa havuz üst sınırı (cap) işi açılacak.
+- B12. KAPANDI ✅ (17 Eyl): ilk canlı mesh — miner-b dinliyor, komuta+miner gossip bağlı. Dinleyici açık bırakıldı.
+- B13. KAPANDI ✅ (17 Eyl): claim'ler canlı corpus'a çıpalandı (1.72M); istek hızı 0.76/sn/miner + kilit 0ms ölçüldü.
+- B14. Toplu-kanıt girişi (YENİ, P2): kanıt POST'u batch-aracılı (komuta girişi ~20 kat hafifler).
+- B15. Mesh denetim protokolü (YENİ, P2, Faz 1): komşu-kanıtı-komşu-doğrular, komuta hakem. Bugünkü `denetim/sonuc` taşınır.
+- B16. Defter federasyonu (YENİ, P3, Faz 2): bölge dağıtıcıları + epoch özet mutabakatı. 1M önkoşulu.
+- B17. Emisyon 1M revizyonu (YENİ, P3, tasarım): stres tablosundaki 100 kat çarpım hatası düzeltmesi + 1M satırı + §2b parametre simülasyonu.
 - B11. Gece nöbeti (bu akşam): `gece-gozlem.sh` tekrar kurulsun mu — operatör onaylı varsayım, akşam sorulacak.
 
 ### SENDEN (operatör)
