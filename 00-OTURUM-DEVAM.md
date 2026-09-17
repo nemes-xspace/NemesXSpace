@@ -7,7 +7,7 @@
 
 ---
 
-## 1. SON SNAPSHOT — 16 Eyl 2026 13:35 (+03, date ile doğrulandı)
+## 1. SON SNAPSHOT — 17 Eyl 2026 12:30 (+03, date ile doğrulandı)
 
 | Kalem | Durum |
 |---|---|
@@ -17,7 +17,8 @@
 | Denetim-2 | B-4 (salt) + STRICT_DENETIM + BUG-2 + B-5 + parse-resume **canlıda**
   (`618d628`, migration 013 uygulandı, 3/3 servis active) |
 | Testler | miner-core 12/12 + komuta-rs 10/10 (`48986cc`; batch/slash yaşam döngüsü gerçek handler'la) |
-| İzleme | 3 alarm triyajlandı: defter (yanlış alarm, düzeltildi) + sayaç (corpus-kör, düzeltildi) + kuyruk (gerçek, batch 20'ye büyütüldü `9f35d1a`) |
+| İzleme | 3 alarm aktif: defter farkı 195/200 mikro SABİT (akan sapma değil, sistematik kırıntı — bilinen-toz) + kuyruk büyüyor (~150K, üretim denetimi geçiyor) + embed-bundle kapalı-beklenen; izleme.py dup-sorgusu hizli turdan gunluge tasindi (15dk tur: 8sn→1.3sn, 1.3G→91M peak) |
+| Komuta OOM | **ÇÖZÜLDÜ 17 Eyl 12:10**: 02:14→11:56 arası 24 OOM-kill (kernel: 17-19G anon RSS). Kök neden `yukle_havuz` her 120sn'de 2.4M satırı `fetch_all` ile RAM'e çekiyordu. Düzeltme: SQL corpus filtresi + 50K parça + id-artımlı ekleme (canlı binary deploy edildi, `.bak` yanında). RSS 12G+swap→**4.5G sabit, 0 swap, 0 kill** (12:10 sonrası). Deploy: `komuta-rs.20260917-havuz.bak` |
 | Güvenlik | Komuta HTTP localhost-only (`d247ab8`, BIND_ADDR); P2P 4003 açık |
 | Tören | 1024-karakter parola doğrulandı (16 Eyl): diskte kopyası YOK (kartta),
   history/repo sızıntısı YOK; redis: `offline-ceremony/` 3 script |
@@ -33,8 +34,8 @@
 | Hafıza sistemi | Bu dosya + `durum-anlik.sh` + Garanti-8 ✅; anatomi §10 eklendi, tatbikat yapıldı |
 | Arşiv | emb 12x7G + bak 25G + shard 12x2.2G → `/srv/beyin/arsiv_cc100/` (25 dosya, 161G, silinen yok) |
 | Servisler | 6/6 active + beyin_sira (ikisi de betikte sorgulanır) |
-| Llama | 1241 tekil `ok` (sorgu kapısı); 1242-1246 kapalı (görev yok) |
-| Miner'lar | Sağlıklı polling, `gorev:bekleniyor` (corpus tr tükenik — bilinen) |
+| Llama | 1241+1242+1247 `ok` (sorgu+miner+VM); 1243-1246 kapalı (görev yok, tasarım). **12:10 olayı**: 3 sunucu SIGTERM ile düştü (fail bilinmiyor — OOM değil, bekçi değil; süpheli: LMStudio/masaüstü). Kurtarma: setsid ile ctx-8192 konfigde yeniden başlatıldı. Kapanış: `beyin-sunucu.service` oneshot cgroup-temizliği çocuğu öldürüyordu → `killmode.conf` (KillMode=process, bekçi örneği) eklendi |
+| Miner'lar | Üretimde: a/b 7.6 vec/s + win (miner-fa8edb50 pay 269K, 269K kanıt — hepsi denetim bekliyor). Görev: newscrawl_tr (cursor ~1.43M). 12:10-12:20 arası embed kesintisi (llama çöküşü) atlatıldı, retry ile döndüler |
 | Disk | /srv/beyin **104G** boş (%89; arşiv buraya taşındı), / **210G** boş (%77) |
 | FAISS | 24 index, toplam ~7.4G (cc100 ~4.9G faiss+ids, diğer 23 ~2.5G) |
 | Yedek | komuta-backup timer günlük çalışıyor (saat ~00:1x bandı); son manuel:
@@ -71,6 +72,9 @@ Anahtar yollar:
 ## 4. SON COMMITLER (yeniler üstte; tam liste `git log` ile)
 
 ```
+(CALIŞMA DİZİNİ, commit bekliyor) 17 Eyl OOM duzeltmesi: yukle_havuz artimli
+  (komuta-rs/src/main.rs) + izleme dup->gunluk (nemes-testnet/izleme.py) +
+  beyin-sunucu killmode.conf + bu dosya | CANLI BINARY DEPLOY EDİLDİ 12:10 |
 a02d493 hafiza (bu dosya+betik+garanti-8, PUSH BEKLIYOR) |
 43ee3ec deploy kaydi (PUSH BEKLIYOR) |
 144def0 B-1/BUG-1/B-3 kod (PUSH BEKLIYOR) |

@@ -367,40 +367,69 @@ fn dequantize_int8(b64: &str, vmin: f32, vmax: f32) -> Option<Vec<f32>> {
     Some(raw.iter().map(|b| vmin + (*b as f32 / 255.0) * range).collect())
 }
 
-/// Kanit defterinden RAM havuzunu kur: (gorev, madde, b64, min, max)
+/// Kanit defterinden RAM havuzunu kur/genislet: (id, madde, b64, min, max)
 /// -> normalize vektorler. Sadece bu komutanin corpus'u alinir.
-async fn yukle_havuz(pool: &SqlitePool, corpus: &str) -> anyhow::Result<VektorHavuzu> {
-    let rows = sqlx::query(
-        "SELECT gorev_id, madde_id, v_int8_b64, v_min, v_max FROM kanitlar"
-    )
-    .fetch_all(pool)
-    .await?;
-    let mut ids = Vec::with_capacity(rows.len());
-    let mut duz = Vec::with_capacity(rows.len() * ARA_BOYUT);
-    for r in &rows {
-        let gid: String = r.get("gorev_id");
-        if gid.split(':').next().unwrap_or("") != corpus {
-            continue;
+///
+/// 17 Eyl OOM dersi: eski surum `SELECT ... FROM kanitlar` ile TUM satirlari
+/// tek `fetch_all` ile RAM'e yigip Rust tarafinda corpus süzüyordu (2.4M satir
+/// -> 17-19G anon RSS, kernel OOM-kill dongusu). Yeni surum:
+///  1. corpus filtresi SQL'de (`LIKE 'corpus:%'`, idx_kanitlar_gorev kullanir),
+///  2. parcali okuma (50K'lik dilimler, sinirli gecici bellek),
+///  3. id-artimli yukleme (`after_id`): kanitlar'a silme YOK, o yuzden artimli
+///     ekleme tam yuklemeyle birebir esdeger; tazelemede sadece yeni satirlar
+///     okunur. Boot `after_id=0` ile tam corpus yukler.
+async fn yukle_havuz(
+    pool: &SqlitePool,
+    corpus: &str,
+    after_id: i64,
+) -> anyhow::Result<(VektorHavuzu, i64)> {
+    const PARCA: i64 = 50_000;
+    let onek = format!("{}:%", corpus);
+    let mut ids = Vec::new();
+    let mut duz = Vec::new();
+    let mut son = after_id;
+    loop {
+        let rows = sqlx::query(
+            "SELECT id, madde_id, v_int8_b64, v_min, v_max FROM kanitlar \
+             WHERE gorev_id LIKE ? AND id > ? ORDER BY id LIMIT ?",
+        )
+        .bind(&onek)
+        .bind(son)
+        .bind(PARCA)
+        .fetch_all(pool)
+        .await?;
+        if rows.is_empty() {
+            break;
         }
-        let b64: String = r.get("v_int8_b64");
-        let vmin: f32 = r.get("v_min");
-        let vmax: f32 = r.get("v_max");
-        let mid: i64 = r.get("madde_id");
-        let mut v = match dequantize_int8(&b64, vmin, vmax) {
-            Some(v) if v.len() == ARA_BOYUT => v,
-            _ => continue,
-        };
-        let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
-        if norm > 0.0 {
-            for x in v.iter_mut() {
-                *x /= norm;
+        let parca_sayisi = rows.len();
+        for r in &rows {
+            let id: i64 = r.get("id");
+            if id > son {
+                son = id;
             }
+            let b64: String = r.get("v_int8_b64");
+            let vmin: f32 = r.get("v_min");
+            let vmax: f32 = r.get("v_max");
+            let mid: i64 = r.get("madde_id");
+            let mut v = match dequantize_int8(&b64, vmin, vmax) {
+                Some(v) if v.len() == ARA_BOYUT => v,
+                _ => continue,
+            };
+            let norm: f32 = v.iter().map(|x| x * x).sum::<f32>().sqrt();
+            if norm > 0.0 {
+                for x in v.iter_mut() {
+                    *x /= norm;
+                }
+            }
+            ids.push(mid);
+            duz.extend_from_slice(&v);
         }
-        ids.push(mid);
-        duz.extend_from_slice(&v);
+        if (parca_sayisi as i64) < PARCA {
+            break;
+        }
     }
     let n = ids.len();
-    Ok(VektorHavuzu { ids, duz, n })
+    Ok((VektorHavuzu { ids, duz, n }, son))
 }
 
 #[derive(Deserialize)]
@@ -2525,11 +2554,15 @@ async fn main() -> anyhow::Result<()> {
         .build()?;
 
     // Vektor havuzu: acilista yukle, arka planda periyodik tazele.
+    // Tazeleme artimlidir (son_id'den yeni satirlar eklenir); kanitlar'a silme
+    // olmadigi icin sonuc tam yuklemeyle esdegerdir (17 Eyl OOM duzeltmesi).
     let matris = std::sync::Arc::new(tokio::sync::RwLock::new(VektorHavuzu::default()));
-    match yukle_havuz(&pool, &corpus).await {
-        Ok(h) => {
+    let mut son_id: i64 = 0;
+    match yukle_havuz(&pool, &corpus, 0).await {
+        Ok((h, son)) => {
             info!("Vektor havuzu yuklendi: {} vektor", h.n);
             *matris.write().await = h;
+            son_id = son;
         }
         Err(e) => warn!("ilk havuz yuklemesi basarisiz (bos devam): {}", e),
     }
@@ -2538,12 +2571,19 @@ async fn main() -> anyhow::Result<()> {
         let matris_r = matris.clone();
         let corpus_r = corpus.clone();
         tokio::spawn(async move {
+            let mut son = son_id;
             loop {
                 tokio::time::sleep(Duration::from_secs(HAVUZ_YENILE_SN)).await;
-                match yukle_havuz(&pool_r, &corpus_r).await {
-                    Ok(h) => {
-                        info!("Vektor havuzu tazelendi: {} vektor", h.n);
-                        *matris_r.write().await = h;
+                match yukle_havuz(&pool_r, &corpus_r, son).await {
+                    Ok((ek, yeni_son)) => {
+                        son = yeni_son;
+                        if ek.n > 0 {
+                            let mut m = matris_r.write().await;
+                            m.ids.extend(ek.ids);
+                            m.duz.extend(ek.duz);
+                            m.n += ek.n;
+                            info!("Vektor havuzu tazelendi: {} vektor", m.n);
+                        }
                     }
                     Err(e) => warn!("havuz tazeleme hatasi: {}", e),
                 }
