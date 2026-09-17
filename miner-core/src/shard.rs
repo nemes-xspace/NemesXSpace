@@ -108,6 +108,7 @@ impl ShardRelay {
             let mut node = match nemes_p2p::P2PNode::new(nemes_p2p::P2PConfig {
                 port,
                 enable_mdns: true,
+                ..Default::default()
             })
             .await
             {

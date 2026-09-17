@@ -586,6 +586,33 @@ async fn ara_get(
     Ok(Json(ara_calistir(&state, &sorgu, k).await?))
 }
 
+/// P2P dugum kimlik tohumu (B18): dosyada 32B saklanir, yoksa uretilir (0600).
+/// Ayni tohum = ayni PeerId (tohum listeleri curumez).
+fn p2p_anahtar_yukle_veya_uret(yol: &str) -> anyhow::Result<[u8; 32]> {
+    use std::os::unix::fs::OpenOptionsExt;
+    let p = std::path::Path::new(yol);
+    if p.exists() {
+        let hexs = std::fs::read_to_string(p)?;
+        let raw = hex::decode(hexs.trim())?;
+        let arr: [u8; 32] = raw
+            .try_into()
+            .map_err(|_| anyhow::anyhow!("p2p anahtar dosyasi 32 bayt olmali"))?;
+        return Ok(arr);
+    }
+    if let Some(parent) = p.parent() {
+        if !parent.as_os_str().is_empty() {
+            std::fs::create_dir_all(parent)?;
+        }
+    }
+    let mut tohum = [0u8; 32];
+    rand::RngCore::fill_bytes(&mut rand::thread_rng(), &mut tohum);
+    let mut opt = std::fs::OpenOptions::new();
+    opt.write(true).create_new(true).mode(0o600);
+    use std::io::Write;
+    opt.open(p)?.write_all(hex::encode(tohum).as_bytes())?;
+    Ok(tohum)
+}
+
 /// Kilit-bekleme metriği (ölçek gözetimi, 16 Eyl): dagitim_kilidi için toplam
 /// bekleme + sayım. 500ms üstü tekil warn, her 1000 kilitte ortalama info.
 /// Eşik aşımı = federasyon ihtiyacı sinyali (yol haritası Faz 2).
@@ -2661,6 +2688,30 @@ async fn main() -> anyhow::Result<()> {
     let port: u16 = std::env::var("PORT").unwrap_or_else(|_| "8787".to_string()).parse()?;
     let p2p_port: u16 = std::env::var("P2P_PORT").unwrap_or_else(|_| "4003".to_string()).parse()?;
     let shard_sub = std::env::var("P2P_SHARD_SUB").unwrap_or_else(|_| "1".to_string()) != "0";
+    // B18 WAN kesif: tohum adresleri (virgullu, `/ip4/.../tcp/.../p2p/...`).
+    // Bos = yalnizca LAN (mDNS) kesfi (eski davranis).
+    let p2p_bootstrap: Vec<String> = std::env::var("P2P_BOOTSTRAP")
+        .unwrap_or_default()
+        .split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|s| s.to_string())
+        .collect();
+    // B18 sabit dugum kimligi: dosya yoksa uretilir (0600). Dosya varsa ayni
+    // PeerId ile acilir (tohum listeleri curumez).
+    let p2p_key_path = std::env::var("P2P_KEY_PATH").unwrap_or_else(|_| {
+        std::path::PathBuf::from(&db_path)
+            .parent().map(|p| p.join("p2p-komuta.key"))
+            .unwrap_or_else(|| std::path::PathBuf::from("/tmp/p2p-komuta.key"))
+            .to_string_lossy().to_string()
+    });
+    let p2p_seed: Option<[u8; 32]> = match p2p_anahtar_yukle_veya_uret(&p2p_key_path) {
+        Ok(s) => Some(s),
+        Err(e) => {
+            tracing::warn!("p2p kimlik dosyasi acilamadi ({}): {} — gecici kimlik", p2p_key_path, e);
+            None
+        }
+    };
     let embed_api = std::env::var("EMBED_API").unwrap_or_else(|_| "http://127.0.0.1:1241".to_string());
     let embed_model = std::env::var("EMBED_MODEL")
         .unwrap_or_else(|_| "text-embedding-nomic-embed-text-v1.5".to_string());
@@ -2815,7 +2866,7 @@ async fn main() -> anyhow::Result<()> {
         let state2 = state.clone();
         let mut yayin_rx = gorev_yayin_rx.take();
         tokio::spawn(async move {
-            let mut node = match P2PNode::new(P2PConfig { port: p2p_port, enable_mdns: true }).await {
+            let mut node = match P2PNode::new(P2PConfig { port: p2p_port, enable_mdns: true, bootstrap: p2p_bootstrap.clone(), key_seed: p2p_seed }).await {
                 Ok(n) => n,
                 Err(e) => {
                     warn!("shard abonesi acilamadi (port {}): {} — ilanlar sadece HTTP ile alinacak", p2p_port, e);

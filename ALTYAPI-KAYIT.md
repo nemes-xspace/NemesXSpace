@@ -110,6 +110,15 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-17: **WAN keşif v1 (B18).** libp2p `kad` + `/nemes/kad/1.0.0` + tohum
+  adresleri + sabit kimlikler: komuta `p2p-komuta.key` (0600, PeerId
+  `12D3KooWNgpfk…rd53K8` — tohum-0 tohumu), miner madenci-anahtarından türetir.
+  `P2P_BOOTSTRAP` / `--bootstrap` bayrakları; bozuk adres yoksayılır.
+  Test: mDNS-kapalı iki düğüm tohumla 3.5sn'de bağlandı. Canlı: komuta+miner-b
+  yeni kimliklerle mesh'te, üretim+mesh-denetim sürüyor. Ara notlar: (1) D-Bus
+  takılınca `sudo -n systemctl` kullan (polkit helper'ları asılı kalıyor).
+  (2) `enable_mdns` bayrağı ÖLÜ bulundu (her zaman açıktı) → artık gerçek.
+  (3) nemes-p2p/ git dışı — B15 notu geçerli.
 - 2026-09-17: **Mesh denetim v1 canlı (B15).** Çift-yığın: komuta kapanan
   batch'te bayraklılar için deterministik atama duyurusu (`nemes/denetim`,
   blake3 korosu, `nemes-core::mesh_audit` paylaşımlı + testli) + metin kapısı

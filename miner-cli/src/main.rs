@@ -76,6 +76,10 @@ enum Commands {
         /// --p2p-dinle gerektirir (yoksa uyariyla yoksayilir).
         #[arg(long, default_value_t = false)]
         denetim_mesh: bool,
+        /// WAN tohum adresleri (B18): `/ip4/.../tcp/.../p2p/...` (virgullu).
+        /// Bos = yalnizca LAN kesfi. --p2p-dinle gerektirir.
+        #[arg(long, default_value = "")]
+        bootstrap: String,
         /// Depolama dizini (taahhut + parcalar). Bos ise ~/.nemes/depolama;
         /// taahhut yoksa heartbeat parcasiz gider (compute-only).
         #[arg(long, default_value = "")]
@@ -144,10 +148,10 @@ async fn main() -> anyhow::Result<()> {
                 println!("KATMAN: storage (komuta C5 sonrasi bu taahhutu isteyecek)");
             }
         }
-        Some(Commands::Mine { gpu, simple, komuta, token, embed_api, model, corpus, anahtar, shard_adet, p2p_port, p2p_dinle, denetim_mesh, depolama }) => {
+        Some(Commands::Mine { gpu, simple, komuta, token, embed_api, model, corpus, anahtar, shard_adet, p2p_port, p2p_dinle, denetim_mesh, bootstrap, depolama }) => {
             let token = token_coz(&token)?;
             if simple {
-                simple_mine(&gpu, &komuta, &token, &embed_api, &model, &corpus, &anahtar, shard_adet, p2p_port, p2p_dinle, denetim_mesh, &depolama).await?;
+                simple_mine(&gpu, &komuta, &token, &embed_api, &model, &corpus, &anahtar, shard_adet, p2p_port, p2p_dinle, denetim_mesh, &bootstrap, &depolama).await?;
             } else {
                 full_tui_mine(&gpu, &komuta).await?;
             }
@@ -222,7 +226,7 @@ async fn miner_id_ogren(komuta: &str, token: &str) -> anyhow::Result<String> {
 }
 
 // ——— Basit log (xmrig klasik) — GERCEK IS: gorev al -> embed -> kanit ---
-async fn simple_mine(_gpu: &str, komuta: &str, token: &str, embed_api: &str, model: &str, corpus: &str, anahtar: &str, shard_adet: i64, p2p_port: u16, p2p_dinle: bool, denetim_mesh: bool, depolama: &str) -> anyhow::Result<()> {
+async fn simple_mine(_gpu: &str, komuta: &str, token: &str, embed_api: &str, model: &str, corpus: &str, anahtar: &str, shard_adet: i64, p2p_port: u16, p2p_dinle: bool, denetim_mesh: bool, bootstrap: &str, depolama: &str) -> anyhow::Result<()> {
     use miner_core::{mining_loop, EmbedClient, GorevAlici, KanitGonderici};
     use miner_core::{anahtar_yolu, anahtar_yukle_veya_uret, ilan_imzala, simdi_ms, ShardRelay, SigningKey};
     use miner_core::depolama as dep;
@@ -352,13 +356,23 @@ async fn simple_mine(_gpu: &str, komuta: &str, token: &str, embed_api: &str, mod
             }
         });
         let benim: Option<String> = shard_mid.clone();
+        let shard_tohum = shard_sk.clone();
+        let bootstrap_liste = bootstrap.to_string();
         let mesh_acik = denetim_mesh && benim.is_some();
         if denetim_mesh && benim.is_none() {
             eprintln!("mesh-denetim kapali: miner_id yok");
         }
         tokio::spawn(async move {
             let mut sayac = 0u64;
-            let mut node = match nemes_p2p::P2PNode::new(nemes_p2p::P2PConfig { port: p2p_port, enable_mdns: true }).await {
+            // B18: dugum kimligi madenci anahtarindan turetilir (kararli PeerId).
+            let tohum: Option<[u8; 32]> = shard_tohum.map(|sk| sk.to_bytes());
+            let tohumlar: Vec<String> = bootstrap_liste
+                .split(',')
+                .map(str::trim)
+                .filter(|s| !s.is_empty())
+                .map(|s| s.to_string())
+                .collect();
+            let mut node = match nemes_p2p::P2PNode::new(nemes_p2p::P2PConfig { port: p2p_port, enable_mdns: true, bootstrap: tohumlar, key_seed: tohum }).await {
                 Ok(n) => n,
                 Err(e) => {
                     eprintln!("p2p dinleyici acilamadi (port {}): {} — poll ile devam", p2p_port, e);

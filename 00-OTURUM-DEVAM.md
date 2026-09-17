@@ -101,6 +101,9 @@ b1b3770 GPU geri | 26def41 GPU 300W
 - B15. KAPANDI ✅ (17 Eyl): mesh denetim v1 canlı — duyuru+metin-kapısı+hakem, miner-b 239/7dk, 0 hata. Eski yol duruyor.
 - B16. Defter federasyonu (YENİ, P3, Faz 2): bölge dağıtıcıları + epoch özet mutabakatı. 1M önkoşulu.
 - B17. KAPANDI ✅ (17 Eyl): stres tablosu düzeltildi (100x hata + frenli 1M satırı + ölçülü altyapı tablosu).
+- B18. KAPANDI ✅ (17 Eyl): WAN keşif v1 — kad+DHT protokolü, sabit kimlikler (komuta PeerId tohum-0), tohum bayrakları, test ispatlı. S3 (4003 modem) WAN'ı açar.
+- B19. Yerel gömme demeti (YENİ, P1): 3 madencinin 3'ü de merkezi embed API kullanıyor (1241/1242/1247); bundle :1251 11 Eyl'den beri ölü. Dış madenci (S4) için önkoşul: demeti dirilt veya madenci-pakete göm.
+- B20. Claim-kirası protokolü (YENİ, P2): madenci aralığı bir kez kiralar, 100 batch gorev sormadan çalışır (dağıtıcı 23K/sn→230/sn). 460+ madencinin önkoşulu.
 - B11. Gece nöbeti (bu akşam): `gece-gozlem.sh` tekrar kurulsun mu — operatör onaylı varsayım, akşam sorulacak.
 
 ### SENDEN (operatör)
@@ -157,7 +160,15 @@ WAF-skip ✅ | push (17 commit) ✅ | **komuta OOM (artımlı havuz, 17 Eyl)** �
 - GPU elleme yok (operatör emri, 12 Eyl). Merkezi sunucu/VPS yok ilkesi.
 - SPOT %10 (siteyle uyumlu). Eşik 0.98 (kod) vs site 0.99 → site düzeltilecek.
 - Arşivde SİLME YOK ilkesi (taşıma var, silme yok).
-- **Kapsam kilidi (16 Eyl): SADECE MADENCİLİK.** Model çıkarma/damıtma/HF işi
+- **TAM OTONOMİ (17 Eyl, operatör beyanı): kapasite sınırı OLMAYAN tam
+  otonom merkeziyetsiz yapay zeka ağı.** Tek bir noktaya milyonlarca veri
+  akışı YOK — yük mesh'te taşınır (kanıt/denetim/parça madenciler arasında);
+  kurucu/komuta SADECE görev dağıtır + hakemlik eder (B15 örüntüsü).
+  Tam otorite tören parolasındadır (1024-karakter, offline, kartta, diskte
+  kopyası yok): epoch imzalama + K1→K3 devri + imha/affet. Bu kilit değişmeden
+  MERKEZİ BİLEŞEN EKLENEMEZ; kalan her merkezi nokta aşağıda mesh-hedefiyle
+  kayıtlıdır (B18-B20). Paralel beyin = 1M makinenin gömme+denetim+depolama
+  yükünü aralarında taşımasıdır; komuta ölçü birimi değil, pusuladır. Model çıkarma/damıtma/HF işi
   ileri döneme ertelendi (1.4, 3.2). Odak: embed/kanıt/ödül/ağ. Bu kilit
   değişmeden `model/` dizinine ve model iddialarına (site Y2) dokunulmaz.
 - Canlı komuta DB'ye ALTER/DROP YOK; sadece CREATE TABLE / ADD COLUMN
