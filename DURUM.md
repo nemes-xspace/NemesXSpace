@@ -1,10 +1,13 @@
-# NEMES-X GÖREV DURUMU — 16 Eyl 13:40 (senkron)
+# NEMES-X GÖREV DURUMU — 17 Eyl 13:50 (senkron)
 > ANAYASA v3.0 (yerel /srv/beyin, 320 madde). GITHUB'DA YOK.
 
 ## TAMAMLANAN ✅ — GÜNCEL KRİTİK YOL
 - **#1 ULTRA 4K60 render bitir + encode + publish — DONE ✅** (31 Ağu 19:50 işaretlendi, %97 → %100)
 - **#2 cc100_tr embed + merge + FAISS-24 — DONE ✅** (15 Eyl: 109.271.443 vektör, 118G merge, 4.1G index, ntotal doğrulandı; 16 Eyl arşivlendi)
 - **#3 Denetim sertleştirme B-1→B-5 — DONE ✅** (16 Eyl: escrow+%10 salt, retry, hash pini, parse resume; migration 012+013 canlıda)
+- **#4 Komuta OOM + denetim zehiri + toplu-kanıt — DONE ✅** (17 Eyl: artımlı havuz RSS 5G sabit, kanarya filtresi kuyruğu eritiyor -15.7K/sa, `/api/kanit/toplu` cap 100; test 12/12)
+- **#5 İlk canlı mesh + shard disiplini — DONE ✅** (17 Eyl: miner-b gossip bağlı, claimler newscrawl 1.72M'de, istek 0.76/sn/miner, kilit 0ms)
+- **Canlı (17 Eyl 13:50):** 2.735M kanıt, kuyruk 168K (eriyor), 136.941 batch, 259.55 NEMES, 3 miner (1.21M/1.23M/299K pay)
 
 ## TAMAMLANAN ✅
 
