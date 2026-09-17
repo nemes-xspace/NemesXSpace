@@ -110,6 +110,17 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-17: **Yaşlı emanet serbest bırakıldı (50 satır, 4750 mikro).** Hepsi
+  kanarya sentetiği (madde<0, 16 Eyl kesimi) — doğrulanamaz, sonsuz alarm
+  üretiyordu. Operatör onayı (a) ile: coin+=miktar + ledger 'escrow', tek
+  transaction. Kopya `/tmp/emanet-kopya-20260917.sql`'de. Defter tozu sabit
+  (195/200/0) — kitaplar denk.
+- 2026-09-17: **5-dk tetikleyici çözüldü (fail biliniyordu, kaynak meçhuldü).**
+  Tuzak (PPID izi) yakaladı: tetikleyici harici döngü/cron DEĞİL —
+  `beyin_sira.service.d/after.conf` içindeki `Wants=beyin-sunucu.service`
+  (tasarım: tur öncesi embed sunucuları ayakta olsun). KillMode düzeltmesiyle
+  bu tasarım ilk kez gerçekten çalışıyor (1243-1246 doldu, 6/6 canlı).
+  Tuzak satırları geri alındı, iz logu duruyor.
 - 2026-09-17: **Toplu-kanıt girişi (B14).** `POST /api/kanit/toplu` (EK yol, cap 100):
   gorev basina 20 HTTP yerine 1. Her kalem mevcut `kanit()` kodunu cagirir
   (odul/emanet/kapanis birebir; kalem hatasi batch'i durdurmaz). Tekil yol aynen

@@ -98,7 +98,7 @@ b1b3770 GPU geri | 26def41 GPU 300W
 - B12. KAPANDI ✅ (17 Eyl): ilk canlı mesh — miner-b dinliyor, komuta+miner gossip bağlı. Dinleyici açık bırakıldı.
 - B13. KAPANDI ✅ (17 Eyl): claim'ler canlı corpus'a çıpalandı (1.72M); istek hızı 0.76/sn/miner + kilit 0ms ölçüldü.
 - B14. KAPANDI ✅ (17 Eyl): toplu-kanıt (`/api/kanit/toplu`, cap 100) — 20 HTTP→1, tekil yol duruyor, test 24/24, canlıda.
-- B15. Mesh denetim protokolü (YENİ, P2, Faz 1): komşu-kanıtı-komşu-doğrular, komuta hakem. Bugünkü `denetim/sonuc` taşınır.
+- B15. Mesh denetim protokolü (YENİ, P2, Faz 1): komşu-kanıtı-komşu-doğrular, komuta hakem. Bugünkü `denetim/sonuc` taşınır. NOT (17 Eyl win bulgusu): win 707 denetim görevi aldı, 0 sonuç — yavaş denetçi yarışı kaybediyor (409), boşa dağıtım/saat ~220. Hız-sınıfı veya itibar-kapılı dağıtım B15'e işlenecek.
 - B16. Defter federasyonu (YENİ, P3, Faz 2): bölge dağıtıcıları + epoch özet mutabakatı. 1M önkoşulu.
 - B17. Emisyon 1M revizyonu (YENİ, P3, tasarım): stres tablosundaki 100 kat çarpım hatası düzeltmesi + 1M satırı + §2b parametre simülasyonu.
 - B11. Gece nöbeti (bu akşam): `gece-gozlem.sh` tekrar kurulsun mu — operatör onaylı varsayım, akşam sorulacak.
@@ -113,13 +113,21 @@ b1b3770 GPU geri | 26def41 GPU 300W
 - S6. Site Y2+Y4 kelime onayı (Y2 kapsam kilidine takılıyor — yayınlanmayacaksa kapatılacak).
 - S7. Avukat randevusu (0.9) + emanetçi/GDPR kararları (4 taslak `docs/`da onay bekliyor).
 - S8. Windows .exe/EV + H motoru (ilk ödeyen müşteri).
+- S9. win10-test CPU topo (YENİ, 17 Eyl): 4 soket→1 soket×4 çekirdek (VM kapalıyken XML düzenle + aç). 3 vCPU 3sn toplamda boşta; win ~3-4 kat hızlanır. Komut: `virsh shutdown win10-test`, XML `sockets=1 cores=4`, `virsh start`.
 
 ### AKŞAM GÜNDEMİ (1M paralel-beyin testleri — 17 Eyl operatör isteği)
 Testle ispatlanacak sorular: (1) dağıtıcı kaç req/sn'ye kadar 0ms kilit tutar
-(yük üreteciyle rampa), (2) toplu-kanıt girişi kaç kat hafifletti (HTTP sayımı),
-(3) mesh duyuru→uyanma gecikmesi kıtlık anında (ilk 204 penceresinde ölçüm),
-(4) emisyon freni (§2b) simülasyonu 30K/1M'da, (5) win .exe mesh'e ne zaman katılır.
-Hazırlık: k6/locust YOK — minik Rust yük üreteci + journal metrikleri yeterli.
+(yük üreteciyle rampa) → ÖLÇÜLDÜ 18:45: ~370/sn tavan (10/50/100 istemcide sabit;
+p99 33→370ms), 0 hata. Gerçek miner 0.76/sn ister → tek komuta ~460 miner taşır;
+30K için claim-kirası (100x) veya federasyon şart.
+(2) toplu-kanıt girişi kaç kat hafifletti (HTTP sayımı) → YAPI+PASİF: 20→1 istek
+(probed canlı, fallback 0); SQL sayısı aynı (tek-tx sonraki tur).
+(3) mesh duyuru→uyanma gecikmesi kıtlık anında (ilk 204 penceresinde ölçüm) → fırsatçı.
+(4) emisyon freni (§2b) simülasyonu 30K/1M'da → HESAPLANDI: fren era'yı korur
+(27K coin/gün tavan, era-1 4 yıl); madenci başı verim 1/N seyrelir
+(30K→0.9/gün, 1M→0.027/gün); dağıtıcı fazla talebi ucuza reddetmeli (204 yolu).
+(5) win .exe mesh'e ne zaman katılır → relay'de ZATEN mesh'te (52140); dinle yok.
+Hazırlık: `nemes-testnet/scripts/yuk-uret.py` (canlı portu reddeder).
 
 ### BLOKELİ (dış bağımlılık)- X1. wet_en (disk) / paracrawl (S3 404) / caselaw-full (hesap).
 - X2. Bağımsız operatörler + topluluk kanalları.
