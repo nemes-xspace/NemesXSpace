@@ -102,7 +102,7 @@ b1b3770 GPU geri | 26def41 GPU 300W
 - B16. Defter federasyonu (YENİ, P3, Faz 2): bölge dağıtıcıları + epoch özet mutabakatı. 1M önkoşulu.
 - B17. KAPANDI ✅ (17 Eyl): stres tablosu düzeltildi (100x hata + frenli 1M satırı + ölçülü altyapı tablosu).
 - B18. KAPANDI ✅ (17 Eyl): WAN keşif v1 — kad+DHT protokolü, sabit kimlikler (komuta PeerId tohum-0), tohum bayrakları, test ispatlı. S3 (4003 modem) WAN'ı açar.
-- B19. Yerel gömme demeti (YENİ, P1): 3 madencinin 3'ü de merkezi embed API kullanıyor (1241/1242/1247); bundle :1251 11 Eyl'den beri ölü. Dış madenci (S4) için önkoşul: demeti dirilt veya madenci-pakete göm.
+- B19. KAPANDI ✅ (17 Eyl): demet gerçekten bağımsız (1.3G, kosinüs 1.0 ispatlı). :1251 kapalı (emir), S4 paketi hazır.
 - B20. Claim-kirası protokolü (YENİ, P2): madenci aralığı bir kez kiralar, 100 batch gorev sormadan çalışır (dağıtıcı 23K/sn→230/sn). 460+ madencinin önkoşulu.
 - B11. Gece nöbeti (bu akşam): `gece-gozlem.sh` tekrar kurulsun mu — operatör onaylı varsayım, akşam sorulacak.
 

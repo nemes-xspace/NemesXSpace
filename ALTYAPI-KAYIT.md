@@ -110,6 +110,15 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-17: **Gömme demeti diriltildi (B19, S4 önkoşulu).** Kök nedenler:
+  (1) demet "self-contained" DEĞİLDİ — 3 .so LMStudio'ya symlinkliydi;
+  (2) Eyl-4 stub + LMStudio 2.28.2 impl karışımı ABI segfault veriyordu
+  (Eyl-10/11 ölüm sebebi bu); (3) start betiği `$1`'i iki kez geçiriyordu.
+  Düzeltme: çalışan LMStudio 2.28.2 seti birebir içeri alındı (bin+8 .so+
+  CUDA 11 runtime, ldd temiz) → 1.3G GERÇEKTEN bağımsız demet; :1259'da
+  test edildi, 1241 ile kosinüs 1.000000. Test kapatıldı, :1251 dokunulmadı
+  (yürürlükteki emir). S4'e hazır yapı (NVIDIA+CUDA gerekir). NOT: demet
+  git dışı (nemes-p2p gibi) — paketleme push'la siteye verilecek.
 - 2026-09-17: **WAN keşif v1 (B18).** libp2p `kad` + `/nemes/kad/1.0.0` + tohum
   adresleri + sabit kimlikler: komuta `p2p-komuta.key` (0600, PeerId
   `12D3KooWNgpfk…rd53K8` — tohum-0 tohumu), miner madenci-anahtarından türetir.
