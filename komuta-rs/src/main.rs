@@ -56,6 +56,11 @@ const YOKLAMA_ACIK_LIMIT: i64 = 2; // miner basina acik ust sinir
 const YOKLAMA_TUR_LIMIT: i64 = 3; // dongu basina uretim ust sinir
 
 /// RAM'deki vektor havuzu: normalize edilmis duz dizi (n x 768).
+/// B10 tavan (18 Eyl): /api/ara 24 saatte hic cagrilmadi; havuz sinirsiz
+/// buyuyup swap'i sisiriyordu. HAVUZ_MAX_VEKTOR (default 1M, 0 = sinirsiz)
+/// asilinca en yeniler tutulur (arama tazeligi korunur).
+const HAVUZ_MAX_VARSAYILAN: usize = 1_000_000;
+
 #[derive(Default)]
 struct VektorHavuzu {
     ids: Vec<i64>,
@@ -63,11 +68,28 @@ struct VektorHavuzu {
     n: usize,
 }
 
+impl VektorHavuzu {
+    /// Tavani uygula: fazlalik en eskiden kirpilir (ids+duz eszamanli).
+    fn tavan_uygula(&mut self, tavan: usize) {
+        if tavan == 0 || self.n <= tavan {
+            return;
+        }
+        let fazla = self.n - tavan;
+        self.ids.drain(..fazla);
+        self.duz.drain(..fazla * ARA_BOYUT);
+        self.n = self.ids.len();
+    }
+}
+
 struct AppState {
     pool: SqlitePool,
     wiki: SqlitePool,
     http: reqwest::Client,
     matris: std::sync::Arc<tokio::sync::RwLock<VektorHavuzu>>,
+    /// Vektor havuz tavani (B10): 0 = sinirsiz. (Durum gorunurlugu icin
+    /// saklanir; yukleme sirasinda yerel kopya kullanilir.)
+    #[allow(dead_code)]
+    havuz_tavan: usize,
     /// Dagitim kritik bolumu kilidi: cursor + supurme + claim sabitleme
     /// ayni anda tek gorevde (cift dagitim yarisini bitirir).
     dagitim_kilidi: tokio::sync::Mutex<()>,
@@ -3391,6 +3413,14 @@ async fn main() -> anyhow::Result<()> {
     let port: u16 = std::env::var("PORT").unwrap_or_else(|_| "8787".to_string()).parse()?;
     let p2p_port: u16 = std::env::var("P2P_PORT").unwrap_or_else(|_| "4003".to_string()).parse()?;
     let shard_sub = std::env::var("P2P_SHARD_SUB").unwrap_or_else(|_| "1".to_string()) != "0";
+    // B10 havuz tavani: HAVUZ_MAX_VEKTOR (default 1M, 0 = sinirsiz).
+    let havuz_tavan: usize = std::env::var("HAVUZ_MAX_VEKTOR")
+        .ok()
+        .and_then(|s| s.parse().ok())
+        .unwrap_or(HAVUZ_MAX_VARSAYILAN);
+    if havuz_tavan > 0 {
+        info!("Vektor havuz tavani: {}", havuz_tavan);
+    }
     // B18 WAN kesif: tohum adresleri (virgullu, `/ip4/.../tcp/.../p2p/...`).
     // Bos = yalnizca LAN (mDNS) kesfi (eski davranis).
     let p2p_bootstrap: Vec<String> = std::env::var("P2P_BOOTSTRAP")
@@ -3477,7 +3507,8 @@ async fn main() -> anyhow::Result<()> {
     let matris = std::sync::Arc::new(tokio::sync::RwLock::new(VektorHavuzu::default()));
     let mut son_id: i64 = 0;
     match yukle_havuz(&pool, &corpus, 0).await {
-        Ok((h, son)) => {
+        Ok((mut h, son)) => {
+            h.tavan_uygula(havuz_tavan);
             info!("Vektor havuzu yuklendi: {} vektor", h.n);
             *matris.write().await = h;
             son_id = son;
@@ -3488,6 +3519,7 @@ async fn main() -> anyhow::Result<()> {
         let pool_r = pool.clone();
         let matris_r = matris.clone();
         let corpus_r = corpus.clone();
+        let tavan_r = havuz_tavan;
         tokio::spawn(async move {
             let mut son = son_id;
             loop {
@@ -3500,6 +3532,11 @@ async fn main() -> anyhow::Result<()> {
                             m.ids.extend(ek.ids);
                             m.duz.extend(ek.duz);
                             m.n += ek.n;
+                            let once = m.n;
+                            m.tavan_uygula(tavan_r);
+                            if m.n < once {
+                                info!("havuz tavan kirpmasi: {} -> {}", once, m.n);
+                            }
                             info!("Vektor havuzu tazelendi: {} vektor", m.n);
                         }
                     }
@@ -3522,6 +3559,7 @@ async fn main() -> anyhow::Result<()> {
         wiki,
         http,
         matris,
+        havuz_tavan,
         dagitim_kilidi: tokio::sync::Mutex::new(()),
         master_pubkey_b64: master_pubkey,
         corpus,
@@ -3809,6 +3847,20 @@ mod tests {
         assert_eq!(defter, 0);
     }
 
+    #[test]
+    fn test_havuz_tavan() {
+        // B10: fazlalik en eskiden kirpilir, ids+duz eszamanli.
+        let mut h = VektorHavuzu { ids: vec![1, 2, 3, 4, 5], duz: vec![0.0; 5 * ARA_BOYUT], n: 5 };
+        h.tavan_uygula(3);
+        assert_eq!(h.n, 3);
+        assert_eq!(h.ids, vec![3, 4, 5]);
+        assert_eq!(h.duz.len(), 3 * ARA_BOYUT);
+        h.tavan_uygula(0); // sinirsiz: degismez
+        assert_eq!(h.n, 3);
+        h.tavan_uygula(99); // tavan ustu: degismez
+        assert_eq!(h.n, 3);
+    }
+
     #[tokio::test]
     async fn test_kilit_metrik() {
         // Metrik sayaci her kilitte genau 1 artar (ölçek gözetiminin temeli).
@@ -3851,6 +3903,7 @@ mod tests {
             yedek_dir: "/tmp".to_string(),
             gorev_yayin_tx: None,
             strict_denetim: false,
+            havuz_tavan: 0,
         })
     }
 

@@ -94,7 +94,7 @@ b1b3770 GPU geri | 26def41 GPU 300W
 - B7. FAISS sayı satırı (YENİ, P3): dokümanda 24 yazıyor, canlıda 25 (25'inci: caselaw, 16 Eyl). 1 satırlık düzeltme.
 - B8. KAPANDI sayılır: `/api/arz` herkese açık doğrulandı (247 NEMES, 131732 batch); `/api/status` + `/api/denetim` token istiyor (tasarım, sorun yok).
 - B9. llama SIGTERM faili takibi (YENİ, pasif): 17 Eyl 12:10'da 3 sunucu SIGTERM ile düştü, fail bilinmiyor. Tekrarlarsa LMStudio/masaüstü izi sürülecek.
-- B10. komuta RSS tavan izleme (YENİ, pasif): şu an 4.9G sabit; >10G olursa havuz üst sınırı (cap) işi açılacak.
+- B10. KAPANDI ✅ (18 Eyl): havuz tavanı (1M) + iskambilciler gitti + drop_caches. Disk bazı yazıldı.
 - B12. KAPANDI ✅ (17 Eyl): ilk canlı mesh — miner-b dinliyor, komuta+miner gossip bağlı. Dinleyici açık bırakıldı.
 - B13. KAPANDI ✅ (17 Eyl): claim'ler canlı corpus'a çıpalandı (1.72M); istek hızı 0.76/sn/miner + kilit 0ms ölçüldü.
 - B14. KAPANDI ✅ (17 Eyl): toplu-kanıt (`/api/kanit/toplu`, cap 100) — 20 HTTP→1, tekil yol duruyor, test 24/24, canlıda.
