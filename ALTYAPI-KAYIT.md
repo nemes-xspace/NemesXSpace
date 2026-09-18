@@ -120,6 +120,9 @@
   Canlı: 2 madenci "GTX 1080 Ti 11G embed,denetim,depolama,uretim" bildiriyor;
   win satirsiz (eski nabiz, uyumlu). Eslesme (gorev-sinifi yonlendirme) ilk
   metin-disi gorevde (B23b). Binary'ler `.20260917-yetenek.bak`'ta. Test 19/19.
+- 2026-09-18: **Kira tam rollout (B20 devamı).** miner-b de kiraya geçti
+  (drop-in); a+b kirada, win eski yolda. Dağıtım ~88→~76/5dk (kalan: win +
+  denetim). Mesh-denetim b'de açık duruyor.
 - 2026-09-17: **Gece nöbeti kuruldu (21:41) + kanarya emanet toplu tasfiye.**
   Kalan 365 kanarya emaneti de serbest bırakıldı (34.697 mikro, 3 madenci;
   kopya `/tmp/emanet-kanarya-tumu.sql`de, defter tozu sabit). Nöbet betiği
