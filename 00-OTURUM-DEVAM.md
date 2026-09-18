@@ -24,7 +24,7 @@
 | Tören | 1024-karakter parola doğrulandı (16 Eyl): diskte kopyası YOK (kartta),
   history/repo sızıntısı YOK; redis: `offline-ceremony/` 3 script |
 | Sıra | Timer kalıbı (`beyin_sira.timer` 5dk + flock; `e5cfdb9`) |
-| Tohum-0 | HTTP(S) tunnel ile CANLI ✅; eksik: CF WAF-skip (/api/*, sende) + 4003 modem (mesh için) |
+| Tohum-0 | HTTP(S) tunnel ile CANLI ✅ (WAF-skip de canlı 16 Eyl); eksik: 4003 modem (mesh için) |
 | Yol haritası | v1.2 ayrı dosyada (`Belgeler/`, 1.1 sabitleri düzeltildi) |
 | Taslaklar | Kurucu-anahtar + GDPR + Tohum-0 + Site-yama (`docs/`, onay bekliyor) |
 | Dalga A | ✅ CANLI: caselaw 454/454 bitti → **newscrawl_tr kesildi** (üretim:
@@ -46,7 +46,7 @@
 ## 2. KRİTİK YOL (07 Eyl revize)
 
 1. ULTRA ✅ → 2. newscrawl+gut ✅ → 3. eğitim adapter-v01 ✅ →
-4. **cc100 ✅ (15 Eyl: embed+merge+FAISS-24)** → 5. FAISS ✅ (24 index, 7.4G) →
+4. **cc100 ✅ (15 Eyl: embed+merge+FAISS)** → 5. FAISS ✅ (25 index, 7.4G) →
 6. Miner v0.2 Windows (iskelet, imza+taahhüt operatörde) →
 7. Komuta+Ödül (B-1/BUG-1/B-3 canlı; B-4/B-5/B-6 + imza Faz-2 bekliyor) →
 8. Debian port (başlanmadı).
@@ -112,6 +112,7 @@ b1b3770 GPU geri | 26def41 GPU 300W
 - D+. TUI arayüz kararı (18 Eyl, operatör beyanı): mock GÖRÜNÜM korunacak, içi canlı veriye bağlanacak (`durum` kanalı hazır, `full_tui_mine` beslenecek). İleride.
 - M+. Mağaza planı (18 Eyl, operatör beyanı): cihaz sitede coinle satılacak — ŞİMDİ DEĞİL (`docs/MAGAZA-PLANI.md` donduruldu).
 - B26. KAPANDI ✅ (18 Eyl): paralel worker (`--isci`, paylaşımlı kira kuyruğu) + taze-sunucu dersi (4 işçi 3.7→130/sn).
+- B27. AÇIK (18 Eyl): merit-tier tasarımı — MADENCI-REHBERI eski `S=V×K` donanım katsayısını vaat ediyordu ama kod flat ödüyor (doğrulandı: kademe=halving era, tiersiz). Karar: self-report GPU'ya göre katman YOK (oyunlanabilir, B23 yetenek beyanı); istenirse tier = doğrulanmış çıktı + stake'ten türetilir. S4-çiftlik beklentisiyle birlikte tasarla.
 - B11. KAPANDI ✅ (17 Eyl 21:41): gece nöbeti devrede (18 tur, kuyruk+RSS+OOM sütunlu).
 
 ### SENDEN (operatör)
@@ -244,7 +245,7 @@ denetim, denetim/sonuc, kanarya/kontrol, shard/ilan, shard, ara (POST+GET),
 parca/tohum, parca/indir, depolama/yoklama[/sonuc/uret] + health.
 
 ### 10.3 Kilit sabitler
-SPOT=%10 (blake3 deterministik) | EŞİK=0.98 | DENETIM_BATCH=5, ödül 50 mikro |
+SPOT=%10 (blake3 deterministik) | EŞİK=0.98 | DENETIM_BATCH=20, ödül 50 mikro |
 SLASH=2000, ITIBAR -25/+1, STRIKE_LIMIT=3 | HALVING testnet 5M (mainnet 50B) |
 TABAN testnet 2000 mikro (mainnet 800) | TASK 20'lik/600sn | ÖLÜ 300sn |
 SHARD 1800sn/100k | PARÇA 64MiB×3 | YOKLAMA 1800sn/1MiB/2-fail | KOTA 100GiB |
@@ -254,7 +255,7 @@ FAISS PQ32, nlist 512/1024, nprobe=128 | EMBED nomic-1.5 768d, int8, BATCH=16.
 wiki_en 38G, gut_en 46G, newscrawl 48G, cc100 symlink→118G merged,
 cc100 shard 12×2.2G (26G, 16 Eyl arşivde), de 16G, ru 16G, fr 13G, arxiv 12G,
 es 11G, ja 9.2G, ar 5.9G, pt 5.1G, zh 4.8G, tr 2.4G + diğer dillerin
-emb-ara çıktıları ~80 parça. FAISS 24 adet 7.4G. done bayrağı 24 adet
+emb-ara çıktıları ~80 parça. FAISS 25 adet 7.4G. done bayrağı 25 adet
 (`kaynaklar/sira_*.done`). testnet bin/ 125M, yedek/ 21G (14 dosya).
 
 ### 10.5 Doküman güncellik
@@ -353,3 +354,4 @@ beyin.py + ingest_paket×9 | komuta_api.py.donduruldu mevcut.
 - Yıkıcı işlem öncesi: sayım + kopya + geri dönüş yolu yazılı.
 - Config değişimi: önce `cat`, sonra drop-in, sonra reload+doğrula.
 - Tatbikat: her büyük hafıza değişiminde sıfır-bağlam testi.
+- Ajan bulgusu: satıra kadar DOĞRULA (Tur-3 dersi 18 Eyl: doküman ajanı ~18 bulgunun ~7'sini uydurdu — olmayan dosya/konum/sayı; P4 ters-yönlü tehlikeliydi. Her bulgu `grep`+`sed` ile teyit edilmeden DOSYAYA DOKUNULMAZ).

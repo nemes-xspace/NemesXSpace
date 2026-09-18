@@ -4,7 +4,11 @@
 > Madenci `--komuta` ile istediğine bağlanır; mesh gossip ile dillenir.
 > Bu belge ev makinesinde düğüm açmayı anlatır (10 dakika + modem ayarı).
 
-## 0. Cloudflare Kalkanı (ŞART — ücretsiz, 15 dakika)
+## 0. Cloudflare Kalkanı (CANLI — 16 Eyl kuruldu, S2 kapandı)
+
+Kurulum tamam: DNS Cloudflare'de, `komuta` kaydı proxy-açık, SSL Full-Strict,
+WAF kuralı `/api/*` 100 istek/dk/IP. Aşağıdaki 6 adım tarihsel kayıttır
+(sıfırdan kurulumda izlenir; mevcut ağda tekrar uygulama):
 
 Ev IP'n asla dünyaya açık görünmez. Trafik Cloudflare kenarında süzülür.
 

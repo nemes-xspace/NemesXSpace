@@ -93,9 +93,9 @@ NEMES'te aynı prizden **bilgi** çıkıyor ve pay birikiyor. Elektrik bilgiye d
 
 ## 2. Kazanç Mantığı (coin + halving, sadeleştirilmiş)
 
-1. **Pay:** `S = V × K` (V = doğrulanmış vektör, K = katman katsayısı:
-   K1=0.5, K2=1.0, K3=2.0, K4=5.0, K5=10).
-   Vektörün %1'i rastgele yeniden hesaplatılır (spot-check); tutmazsa pay yok.
+1. **Pay:** `S = V` (V = doğrulanmış vektör; herkes aynı oranda — katman
+   katsayısı henüz yok, bkz. B27 merit-tier tasarımı).
+   Vektörün %10'u rastgele yeniden hesaplatılır (spot-check); tutmazsa pay yok.
 2. **Batch:** 20 kanıt = 1 batch. Batch ödülü taban **0.002 NEMES**.
 3. **Halving:** her 5M batch'te ödül yarıya iner (erken madenci bonusu).
 4. **Havuz:** `H = gelir × %50` (Enterprise + ücretli API geliri).

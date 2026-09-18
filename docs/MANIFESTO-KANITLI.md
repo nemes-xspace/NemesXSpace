@@ -188,9 +188,9 @@ alırız. Engel para değil, fiziktir — ve fizik bizden yanadır.
 Aynı priz, başka iş. Ev GPU'ları hash değil **vektör** üretiyor:
 
 - Açık veri → GPU embedding (nomic-embed-text-v1.5, int8) → kalıcı FAISS index.
-- Ağ kayıtları (Eyl 2026): **109M doküman** işlendi, **44M+ vektör** indexlendi
-  (gut_en 5,07M + newscrawl_tr 38,9M + 21 küçük index, toplam 3,4GB). **[K10]**
-- Her vektörün %1'i rastgele yeniden hesaplatılır; tutmayan kanıt silinir,
+- Ağ kayıtları (Eyl 2026): **110M+ doküman** işlendi, **110M+ vektör** indexlendi
+  (cc100 109,3M + madenci üretimi newscrawl/tr, 25 index, ~7,4GB). **[K10]**
+- Her vektörün %10'u rastgele yeniden hesaplatılır; tutmayan kanıt silinir,
   hileci strike yer. Güven değil **doğrulama**.
 - Kör batch'ler (tuzlanmış ID, corpus adı yok) + kanarya tuzakları + kanıtlı
   sızıntıda imha (ban + pay sıfırlama). Fiş çekmek serbest, hainlik yasak. **[K11]**
@@ -200,7 +200,7 @@ Aynı priz, başka iş. Ev GPU'ları hash değil **vektör** üretiyor:
   sunucu düğümlerde; distileleri tek GPU'da. **[K13][K14]**
 - Ekonomi: arz tavanı 210M, emekle basım, halving (era ~3 yıl), gelirin
   yarısı üreticiye (`docs/TOKENOMI.md` v1.0-kilitli). Premine yok: testnet'te
-  basılan ~99 coin'in tamamı 976 bin kanıtın karşılığı. Era ödülü 0,5'te
+  basılan ~435 coin'in tamamı 4,3M kanıtın karşılığı (18 Eyl). Era ödülü 0,000005'te
   durur, asla sıfırlanmaz — Bitcoin'de fee'lerin devralması gibi. **[K34]**
 
 ### Neden kazanırız (üç fizik kuralı)
@@ -228,7 +228,7 @@ Aynı priz, başka iş. Ev GPU'ları hash değil **vektör** üretiyor:
 | Dava gizliliği ("sandbox") | Kayıtlar açık, kanıt zorunlu |
 | Fiyat musluğu tek taraflı | Havuz formülü kodda, %50 sabit |
 | Kapatılamaz israf (%0,5 elektrik) | Kapatılabilir, denetlenebilir ağ |
-| 72M premine + %9,9 içeridekilere | Tavan 210M, ilk coin emekle (99 coin = 976K kanıt) |
+| 72M premine + %9,9 içeridekilere | Tavan 210M, ilk coin emekle (435 NEMES = 4,3M kanıt, 18 Eyl) |
 | API duvarı ($20M Apollo faturası) | API açık, duvar yok, kota kodda |
 | Kâr maskesi ($500B, %27 Microsoft) | Kâr amacı yok, havuz formülü sabit |
 | Bulut tekeli ($320B capex, 18-30 ay inşaat) | Ev prizi, sıfır inşaat, sıfır izin |
@@ -298,11 +298,11 @@ iddia "belgele" oynuyor. Hukuk yavaş, arşiv sabırlı.
 (min-max ölçekli) 768 bayta indirir (4x); PQ32 (32 alt-vektör × 8 bit)
 **32 bayta** indirir (**96x**). gut_en: 5,07M × 32B ≈ 162MB + tablo yükü =
 207MB dosya (Eyl 2026 ölçümü). newscrawl_tr: 38,9M vektör = 1,5GB. **[K10]**
-Arama kaybı ihmal edilebilir (nprobe=128, kosinüs eşiği 0,99).
+Arama kaybı ihmal edilebilir (nprobe=128, kosinüs eşiği 0,98).
 
-**Yakalama matematiği:** her kanıt %1 olasılıkla denetime düşer. Sahte
-üretenin 100 kanıtta yakalanma olasılığı 1 − 0,99^100 ≈ **%63**; 300 kanıtta
-**%95**. Hile beklenen değerde her zaman zarar eder (strike + pay silinme),
+**Yakalama matematiği:** her kanıt %10 olasılıkla denetime düşer. Sahte
+üretenin 100 kanıtta yakalanma olasılığı 1 − 0,90^100 ≈ **%99,997**; 300 kanıtta
+**~%100**. Hile beklenen değerde her zaman zarar eder (strike + pay silinme),
 dürüstlük her zaman kârdadır. Denetim eş-doğrulamalıdır (başka madenci
 yeniden hesaplar), merkez hakem yoktur.
 
@@ -378,7 +378,7 @@ buna bizimkiler dahil.
 - [K31] TIME/Perrigo (Oca 2023) — Sama Kenya: $1,32-2/saat, $12,50 vs $1,32 (6-9x kesinti), $200K sözleşme, travma. https://time.com/6247678/openai-chatgpt-kenya-workers
 - [K32] Guardian (Ağu 2023) — 51 moderatör dilekçesi, $1,46-3,74, erken fesih. https://www.theguardian.com/technology/2023/aug/02/ai-chatbot-training-human-toll-content-moderator-meta-openai
 - [K33] The Register (Nis 2026) — Copilot sayaçlı krediye döndü ($0,01/kredi, Pro $10/Pro+ $39). https://www.theregister.com/software/2026/04/28/microsofts-github-shifts-to-metered-ai-billing/5224151
-- [K34] NEMES-X `docs/TOKENOMI.md` v1.0-kilitli + canlı defter (99 NEMES, 976K kanıt).
+- [K34] NEMES-X `docs/TOKENOMI.md` v1.0-kilitli + canlı defter (435 NEMES, 4,3M kanıt, 18 Eyl).
 - [K35] CNN + Ars Technica (May-Haz 2023) — Reddit API: $12.000/50M istek, Apollo'ya $20M/yıl, 30 Haz 2023 kapanış. https://edition.cnn.com/2023/06/01/tech/reddit-outrage-data-access-charge
 - [K36] TechCrunch (Haz 2023) — 8.000 subreddit karartması. https://techcrunch.com/2023/06/12/reddit-blackout-8000-subreddits-went-dark-protest-api
 - [K37] The Verge (May 2023) — Twitter $42.000/50M tweet. https://www.theverge.com/2023/5/31/23743993/reddit-apollo-client-api-cost
