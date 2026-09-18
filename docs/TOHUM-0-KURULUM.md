@@ -10,10 +10,9 @@
 - Doğrulandı: dig CF IP'leri + dış curl 200.
 
 ## B. Cloudflare paneli — SENDE (2 dk)
-- [ ] WAF → `komuta.nemes-x.space/api/*` için **Skip kuralı** (Bot Fight Mode
-  çıplak API istemcilerini 1010 ile kesiyor; 16 Eyl kanıtlandı).
-  Kural yoksa dış miner'lar kayıt olamaz. Miner UA (`NEMES-Miner/0.2`)
-  ikinci savunmadır, yerine geçmez.
+- [x] WAF → `komuta.nemes-x.space/api/*` için **Skip kuralı** (16 Eyl kuruldu, CANLI).
+  (Tarihsel gerekçe: Bot Fight Mode çıplak API istemcilerini 1010 ile kesiyordu.
+  Miner UA (`NEMES-Miner/0.2`) ikinci savunmadır, yerine geçmez.)
 - [ ] TLS modu: Full (Strict) önerilir (Caddy'de otomatik sertifika var).
 
 ## C. Modem — SADECE P2P İÇİN (mesh'e tam katılım istenirse)
@@ -24,7 +23,7 @@
 ## D. Dış prova turu (benimle birlikte)
 - [x] Dış curl 200 (16 Eyl).
 - [x] Dış kayıt 200 (UA ile, 16 Eyl; test satırı temizlendi).
-- [ ] Gerçek dış makineden miner kaydı + ilk pay (WAF kuralından sonra).
+- [ ] Gerçek dış makineden miner kaydı + ilk pay (WAF CANLI 16 Eyl; engel kalmadı, prova bekleniyor).
 
 ## Kabul kriteri
 Dışarıdan 1 madenci kaydı + ilk payı alır → 0.3 DONE, Faz 0→1 kapısı için sayılır.

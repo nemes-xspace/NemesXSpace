@@ -5,7 +5,6 @@ use std::sync::OnceLock;
 use anyhow::{anyhow, Result};
 use std::process::Child;
 use reqwest::blocking;
-use zip::ZipArchive;
 
 /// llama.cpp binary yollarını yöneten wrapper
 pub struct LlamaServer {
@@ -236,8 +235,6 @@ pub fn blake3_dosya(yol: &Path) -> Result<String> {
 
 /// llama-server'ı indir ve `binaries/` klasörüne koy
 pub fn download_llama_server() -> Result<PathBuf> {
-    use std::io::Write;
-    
     let target_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("binaries");
     std::fs::create_dir_all(&target_dir)?;
 

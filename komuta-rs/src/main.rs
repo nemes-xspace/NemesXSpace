@@ -2,14 +2,14 @@
 use axum::{
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
-    response::{IntoResponse, Json, Response},
+    response::{IntoResponse, Json},
     routing::{get, post},
     Router,
 };
-use chrono::{DateTime, Utc};
+use chrono::Utc;
 use ed25519_dalek::{Signature, Verifier, VerifyingKey};
 use serde::{Deserialize, Serialize};
-use sqlx::{SqlitePool, Row, query_as};
+use sqlx::{SqlitePool, Row};
 use sqlx::sqlite::SqlitePoolOptions;
 use nemes_core::shard::ShardIlan;
 use nemes_p2p::{NetworkEvent, P2PConfig, P2PNode, GOREV_TOPIC};
@@ -18,7 +18,7 @@ use rand::Rng;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
 use tokio::signal;
 use tower_http::{cors::CorsLayer, trace::TraceLayer};
-use tracing::{error, info, warn};
+use tracing::{info, warn};
 use uuid::Uuid;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 
@@ -26,11 +26,12 @@ use base64::{engine::general_purpose::STANDARD, Engine as _};
 const COIN_UNIT: i64 = 1_000_000;
 // Uretim: batch bazli odul. 20 kanit = 1 batch = 1 odul birimi.
 const BATCH_ODUL_TABAN_MIKRO: i64 = 2_000; // batch basina 0.002 NEMES (kademe 0)
+const KUYRUK_TABAN_MIKRO: i64 = 5; // kuyruk tabani 0,000005 (TOKENOMI kilitli; altina inmez)
 const HALVING_BATCH: i64 = 5_000_000; // her 5M tamamlanan batch'te odul yariya iner (=100M kanit)
 const SPOT_CHECK_YUZDE: u8 = 10; // kanitlarin %10'u rastgele denetime duser (site ile uyumlu; B-1)
 // B25 bagisiklik: asagidaki atomikler calisma aninda guncellenir (arka-plan
 // gorevi, son 1 saatin ret oranina gore). Tabandan baslar, tavana kadar cikar.
-static SPOT_YUZDE_DINAMIK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(10);
+static SPOT_YUZDE_DINAMIK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(SPOT_CHECK_YUZDE as u64);
 static KANARYA_BPBIN_DINAMIK: std::sync::atomic::AtomicU64 =
     std::sync::atomic::AtomicU64::new(400); // 400bp = %4
 
@@ -348,10 +349,9 @@ fn komut_mesaj(epoch: i64, expires: i64, payload: &str) -> Vec<u8> {
 /// Uretim odulu: tamamlanan batch sayisina gore batch basina mikro coin.
 fn current_batch_reward_micro(tamamlanan_batch: i64) -> i64 {
     let halvings = (tamamlanan_batch / HALVING_BATCH) as u32;
-    if halvings >= 31 {
-        return 0;
-    }
-    BATCH_ODUL_TABAN_MIKRO >> halvings
+    // TOKENOMI §kuyruk-taban: era odulu 5 mikro (0,000005) altina INMEZ.
+    // Kayma 2000>>n hic 5 uretmez (...,7,3,1,0) — tabanla kilitle, olumu kaldir.
+    (BATCH_ODUL_TABAN_MIKRO >> halvings.min(31)).max(KUYRUK_TABAN_MIKRO)
 }
 
 /// Guvenlik Md.1: corpus adi tele cikmaz; 8-hex kod gonderilir.
@@ -3890,7 +3890,7 @@ async fn main() -> anyhow::Result<()> {
                     .unwrap_or(0);
                     if top > 0 {
                         let kotu: i64 = sqlx::query_scalar(
-                            "SELECT COUNT(*) FROM kanitlar WHERE dogrulama IS NOT NULL AND dogrulama < 0.98 AND ts > ?",
+                            &format!("SELECT COUNT(*) FROM kanitlar WHERE dogrulama IS NOT NULL AND dogrulama < {} AND ts > ?", DENETIM_ESIK),
                         )
                         .bind(now - 3600)
                         .fetch_one(&pool_y)
@@ -4008,9 +4008,10 @@ mod tests {
         assert_eq!(current_batch_reward_micro(HALVING_BATCH - 1), BATCH_ODUL_TABAN_MIKRO);
         assert_eq!(current_batch_reward_micro(HALVING_BATCH), BATCH_ODUL_TABAN_MIKRO / 2);
         assert_eq!(current_batch_reward_micro(2 * HALVING_BATCH), BATCH_ODUL_TABAN_MIKRO / 4);
-        // 31+ halving = sifir (tavan kilidi)
-        assert_eq!(current_batch_reward_micro(31 * HALVING_BATCH), 0);
-        assert_eq!(current_batch_reward_micro(i64::MAX / 2), 0);
+        // Kuyruk taban kilidi (TOKENOMI): 31+ halving de 5 mikroya iner, sifira DUSMEZ.
+        assert_eq!(current_batch_reward_micro(31 * HALVING_BATCH), KUYRUK_TABAN_MIKRO);
+        assert_eq!(current_batch_reward_micro(i64::MAX / 2), KUYRUK_TABAN_MIKRO);
+        assert_eq!(current_batch_reward_micro(9 * HALVING_BATCH), 5); // 2000>>9=3 -> taban 5
     }
 
     #[test]

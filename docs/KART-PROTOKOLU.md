@@ -29,7 +29,7 @@
    NOT: Mevcut tören kartı (exFAT + dosyalar) için ÖNCE yedek, SONRA göç;
    göç onayı ayrı verilir (şu an verilmedi).
 4. `nemes-kart ac` ile açıldığını doğrula, `kapat` ile kapandığını doğrula.
-5. udev kuralını kur (şablon: `scripts/99-nemes-kart.rules.sablon`):
+5. udev kuralını kur (şablon: `nemes-testnet/scripts/99-nemes-kart.rules.sablon`):
    UUID'yi işle, reload et, kartı çıkarıp `kasa_acik=false` olduğunu gör.
 6. YEDEK kartı AYNI prosedürle hazırla, FARKLI fiziksel yerde sakla.
 

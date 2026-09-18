@@ -9,7 +9,7 @@
 |---|---|---|
 | Meraklı madenci | Kendi batch'lerini okur | Batch'ler bağlamsız + kör ID'li → işe yaramaz |
 | Büyük firma (çok düğüm) | Birçok batch toplar | Rotasyon + bölge yasağı → resim birleşmez |
-| Dış dinleyici | Teli dinler | Noise/HTTPS + 24s anahtar rotasyonu |
+| Dış dinleyici | Teli dinler | Noise/HTTPS + 24 saatte anahtar rotasyonu |
 | Sahte düğüm | Ağa girmeye çalışır | Ed25519 TOFU + ilk shard ilanı denetimi |
 | İç hain (kanıtlı) | Veriyi dışarı taşır | Kanarya → ban + pay sıfırlama + kara liste |
 

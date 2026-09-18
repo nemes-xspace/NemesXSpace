@@ -16,7 +16,7 @@
 
 ## Y3. FAISS/EPOCH bölümü
 - `index.st_faiss_n` + roadmap `road_5` ("FAISS index completion"):
-  24 index / cc100 4.1G notu eklenir.
+  25 index / ~7.4GB notu eklenir.
 
 ## Y4. Tokenomik özeti
 - Coin+halving kilitli kararın kamuya açık 3 satırlık özeti (tavan 210M,

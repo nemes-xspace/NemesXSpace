@@ -2,6 +2,11 @@
 
 **Durum:** taslak v1.1 — 10 Eyl 2026. Başlangıç fotoğrafı: testnet canlı (2 madenci, 99 NEMES, 976K kanıt), FAISS 23 index 3,4GB, cc100 embed sürüyor, site 8 dilde yayında, tokenomik + güvenlik + tüm mimari kararlar kilitli.
 
+> **18 Eyl güncellemesi (taslak metni korunur):** 4.30M kanıt, 3 miner,
+> 434.5+ NEMES, FAISS 25 index ~7.4GB, cc100 DONE (15 Eyl), WAF-skip + Tohum-0
+> CANLI. Aşağıdaki 0.1 (cc100) ve 0.3 (Tohum-0) satırları kapandı. Bütçe
+> tablosu (§Bütçe Özeti) satır-toplam tutarsız — operatör kararı bekleniyor.
+
 **İlke:** merkezi sunucu yok (Garanti Kuralı 6) — her faz dağıtımı artırır.
 **Ölçü birimi her fazda aynıdır:** düğüm sayısı, vektör sayısı, haftalık batch, havuz büyüklüğü (H), bağımsız operatör sayısı.
 **Efor birimi:** adam-gün (1 kişi × 1 tam iş günü ≈ 8 saat). **Bütçe:** nakit harcama (USD); token/treasury kalemleri ayrıca belirtilir.
@@ -38,9 +43,9 @@
 
 | # | İş | Bitiş kriteri | Efor (adam-gün) | Bütçe (USD) | Sahip |
 |---|---|---|---|---|---|
-| 0.1 | cc100_tr embed → merge → FAISS (#24) | 24. index `wiki_cc100_tr.faiss` + örnek sorgu yeşil | 4 | 0 (mevcut donanım) | ben (akıyor) |
+| 0.1 | cc100_tr embed → merge → FAISS (#24) | 24. index `wiki_cc100_tr.faiss` + örnek sorgu yeşil | 4 | 0 (mevcut donanım) | ben (DONE 15 Eyl) |
 | 0.2 | caselaw embed (Illinois vol 1 hazır) | `wiki_caselaw.faiss` + pipeline turu TAMAM | 4 | 0 | ben (cc100 sonrası) |
-| 0.3 | Tohum-0 canlı (ev makinesi) | `komuta.` DNS + TLS + dışarıdan kayıt→görev→kanıt turu yeşil | 3 | 30 (alan adı yıllık) | sen (DNS+modem) + ben (prova) |
+| 0.3 | Tohum-0 canlı (ev makinesi) | `komuta.` DNS + TLS + dışarıdan kayıt→görev→kanıt turu yeşil | 3 | 30 (alan adı yıllık) | sen (DNS DONE) + ben (dış prova bekleniyor) |
 | 0.4 | Operatör kiti v1 yayında | docs + 1 gönüllüde 2. düğüm ayakta | 5 | 0 | ben |
 | 0.5 | Miner indirme sayfası doğrulama | Linux zip + WSL kılavuzu + SHA256, 3. parti makinede kurulum provası | 3 | 0 | ben |
 | 0.6 | 6-dil gövde çevirileri (miner+manifesto) | topluluk + AI destekli, TR/EN önce, diğerleri kademeli | 6 | 0 (gönüllü) | sen + topluluk |

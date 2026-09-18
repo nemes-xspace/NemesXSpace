@@ -54,8 +54,9 @@ Madenci GPU'sunu çalıştırır, doğrulanmış her vektör için **pay (share)
 - Kullanıcı `nemes-x.space`'ten indirir, normal kullanıcı olarak çalıştırır
 
 ### C) Video — Promo Film (`/srv/beyin/website/video`)
-- **Mevcut canlı:** `nemes-x-promo-en-135s.mp4` — 1080p30, 21.3MB, 135sn, EN anlatım + ducking müzik, gerçek logo (eğri şeritler, Nx, NETWORK)
-- **ULTRA (devam):** `generate_frames_ultra.py` — 8K→4K SSAA, 12 örneklem motion blur, subpixel Ken Burns, soft-knee bloom, filmik grade, 8100 frame @60fps, 4K x265 + 1080p60, 7881/8100 (%97), 4 worker nice19, 70-75°C bekçili
+- **Mevcut canlı:** `nemes-x-promo-en-135s.mp4` — 1080p30, 21.3MB, **180sn ölçülü**
+  (dosya adı 135s der, ffprobe 180s; etiketler düzeltilecek), EN anlatım + ducking müzik
+- **ULTRA (DONE 31 Ağu, %100):** `generate_frames_ultra.py` — 8K→4K SSAA, 12 örneklem motion blur, subpixel Ken Burns, soft-knee bloom, filmik grade, 8100 frame @60fps, 4K x265 + 1080p60, 4 worker nice19, 70-75°C bekçili
 
 ### D) Website — `nemes-x.space` (`/srv/beyin/website`)
 - `index.html` (video embed, download, miner), `verify.html`, `press.html`, GitHub Pages (`nemes-xspace.github.io`, token ile publish)
@@ -68,11 +69,14 @@ Madenci GPU'sunu çalıştırır, doğrulanmış her vektör için **pay (share)
 
 | Katman | Güç | Kitle | Lisans | Teknik |
 |--------|-----|-------|--------|--------|
-| **NEMES-Free** | %1 (7B sinifi, 40M vektorden damitildigi icin rakiplerinden %15-20 guclu) | Herkes, bireyler | **Tescilli — Tum Haklari Saklidir, yazili izinle** | 70B ana beyinden damitma + FAISS retrieval |
+| **NEMES-Free** | vizyon: 7B sınıfı damıtma (70B ana beyinden; damıtma ERTELENDİ, Qwen3-LoRA kilit — geçmiş başarı gibi okunmasın) | Herkes, bireyler | **Tescilli — Tum Haklari Saklidir, yazili izinle** | 70B ana beyinden damitma + FAISS retrieval |
 | **Modlar** | `default: 3B` (hızlı/telefon) / `high: 30B` (güçlü/API) | Çeşitlilik için | Aynı Free içinde mod seçimi | Tek damıtma, çok mod |
 | **NEMES-Enterprise** | **%100** (70B+ Sovereign) | Şirketler (>1M token/ay veya 20+ çalışan) | **Ücretli** — Cloud API veya **On-Premise** (kendi DC'sinde, yıllık lisans) | Büyük şirket halka açık hattı taciz etmesin |
 
-**Finansman (2 aşamalı, 28 Ağu kararı — `docs/TOKENOMI.md`):** Faz 1'de Madenci=Müşteri (API hakkı, hazineye dokunma), Faz 2'de Hazine + Enterprise × %50 → nakit payout
+**Finansman (2 aşamalı, 28 Ağu kararı — güncel otorite `docs/TOKENOMI.md` v1.0-kilitli):**
+Faz 1'de Madenci=Müşteri, Faz 2'de Hazine + Enterprise × %50 → nakit payout.
+(Not: TOKENOMI, önceki `odul-stratejisi.md`'deki "Faz 1 API-hakkı" ifadesini
+yürürlükten kaldırdı — API-hakkı cümlesi bu satırda artık geçersiz, faz mantığı korunur.)
 
 ---
 

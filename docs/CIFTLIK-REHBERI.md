@@ -32,8 +32,9 @@ GET /api/filo?cuzdan=TRC20   # filonun pay/coin/itibar/gpu listesi
 - Batch (20 kanıt): 2000 mikro (0.002 NEMES); era1 mainnet: 800 mikro.
 - Bayraklı kanıt payı emanette bekler (denetim geçince çözülür).
 - Kötü kanıt: slash 2000 mikro + strike (3 = hat dışı).
-- Kaba kural: GPU başına ~5 kanıt/sn → 100 GPU ≈ 43K kanıt/gün ≈
-  ~43 NEMES/gün (testnet; mainnet era1 ~17/gün).
+- Kaba kural (teorik tavan, frensiz): GPU başına ~5 kanıt/sn → 100 GPU ≈
+  43M kanıt/gün ≈ ~4.300 NEMES/gün (testnet; mainnet era1 ~1.700/gün).
+  Gerçekte fren/kota/denetim birikimi düşürür.
 
 ## Yasaklar (ağ sağlığı)
 

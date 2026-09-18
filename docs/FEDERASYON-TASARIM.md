@@ -50,5 +50,6 @@ Madenci sayısından bağımsız ölçek: bölge ekle, kapasite ekle.
 ## Açık sorular (1.1 provasında karar)
 
 - Bölge sayısı formülü (madenci/10K başına 1?).
-- Epoch süresi (24s vs 6s) + özet boyutu.
+- Slot/blok süresi (24s vs 6s) + özet boyutu. (Not: bu, yukarıdaki 24 saatlik
+  bölge-epoch'tan farklı katmandır; bölge-epoch kararlı, slot süresi açık.)
 - Kök defter teknolojisi (SQLite zincir dosya mı, Postgres mi?).

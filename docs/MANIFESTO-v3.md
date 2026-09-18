@@ -2,6 +2,11 @@
 *Paralı Zeka Düzenine Karşı İddianame*
 **Tarih:** 28 Ağustos 2026 | **Durum:** Onaylandı
 
+> **TARİHSEL SÜRÜM (18 Eyl notu):** Bu metin 28 Ağu fotoğrafıdır; sayılar
+> (eşik 0.99, vektör toplamları) o güne aittir. Canlı gerçek:
+> `docs/MANIFESTO-KANITLI.md` (eşik 0.98, spot %10, 25 index). Tarih
+> bütünlüğü için metin değiştirilmedi.
+
 ---
 
 ### GİRİŞ: SOYGUNUN ADI

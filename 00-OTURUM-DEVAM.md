@@ -113,6 +113,13 @@ b1b3770 GPU geri | 26def41 GPU 300W
 - M+. Mağaza planı (18 Eyl, operatör beyanı): cihaz sitede coinle satılacak — ŞİMDİ DEĞİL (`docs/MAGAZA-PLANI.md` donduruldu).
 - B26. KAPANDI ✅ (18 Eyl): paralel worker (`--isci`, paylaşımlı kira kuyruğu) + taze-sunucu dersi (4 işçi 3.7→130/sn).
 - B27. AÇIK (18 Eyl): merit-tier tasarımı — MADENCI-REHBERI eski `S=V×K` donanım katsayısını vaat ediyordu ama kod flat ödüyor (doğrulandı: kademe=halving era, tiersiz). Karar: self-report GPU'ya göre katman YOK (oyunlanabilir, B23 yetenek beyanı); istenirse tier = doğrulanmış çıktı + stake'ten türetilir. S4-çiftlik beklentisiyle birlikte tasarla.
+- B28. KAPANDI ✅ (18 Eyl): kuyruk tabanı kodda yoktu (`2000>>n` → 3,1,0 ölüm; TOKENOMI "5 mikro altına inmez" ihlali). Fix: `(2000>>min(n,31)).max(5)` + test taban-kilidi. Not: era1-800 çelişki DEĞİL — TOKENOMI §:31-33 testnet-2000→mainnet-800+50B geçişini planlamış.
+- B29. KAPANDI ✅ (18 Eyl): miner-api repodan silindi (6 dosya, git rm; 08 Eyl'den dondurulmuştu, workspace-dışı, derlenemez, sabit JWT + joker CORS + 0.0.0.0:8787 içeriyordu).
+- B30. KAPANDI ✅ (18 Eyl): izleme yanlış alarm veriyordu (sayı>500; normal birikim 88K). Fix: FIFO (ORDER BY ts ASC doğrulandı) → yaş-alarmı (en eski >72sa). Ölçüm: birikim ~88K, en eski ~50sa = normal, alarm yok. Escrow yaşlı-alarmı aynı dile çekildi (72sa).
+- B31. KAPANDI ✅ (18 Eyl, nemes-p2p commit): gossip komut replay açığı (imza var, vade yok) → `verify_signed_command_taze` + CLI vade-reddi; mDNS dial `?` → warn+continue; `validate_block Ok(true)` → fail-closed bail; ölü csprng + yanlış help/Kad yorumu düzeltildi. Build + test yeşil.
+- B32. KAPANDI ✅ (18 Eyl): yuk-uret canlı-port bypass (path-son-eki) → URL-parse guard + testli; backup-db.py ölü-değişken + 600-chmod; backup-db.sh (referanssız çift) silindi; yedek 9×644→600; scriptler 775→755/644; nemes-kart mlock kopya-bug (`bytes(buf)` → `from_buffer`).
+- Tur-4 KAPSAMLI tarama (18 Eyl): 5 paralel ajan, 117 dosya envanterli. 30+ gerçek düzeltme (kod+güvenlik+doc+site, yukarıda). 11 FANTOM düşürüldü (TO1 frenli/frensiz ayrımıydı, U1 tarihli deney kaydıydı, O1 yanlış dizine bakılmıştı, F1 açık-soruydu, P0b-7b/9/P3-15/P4/DURUM/POOL/es-bid/ru-faq uydurmaydı). Kural pekişti: bulgu grepsiz dosyaya dokunmaz.
+- Test notu: `test_http_denetim_turu` paralel koşuda ~1/6 flake (tekli 24/24; ayrı koşuda 3/3; full-paralel 3/3 sonradan) — kod-değişim kaynaklı değil, zamanlama yarışı; izlemede.
 - B11. KAPANDI ✅ (17 Eyl 21:41): gece nöbeti devrede (18 tur, kuyruk+RSS+OOM sütunlu).
 
 ### SENDEN (operatör)

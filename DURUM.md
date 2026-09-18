@@ -7,14 +7,14 @@
 - **#3 Denetim sertleştirme B-1→B-5 — DONE ✅** (16 Eyl: escrow+%10 salt, retry, hash pini, parse resume; migration 012+013 canlıda)
 - **#4 Komuta OOM + denetim zehiri + toplu-kanıt — DONE ✅** (17 Eyl: artımlı havuz RSS 5G sabit, kanarya filtresi kuyruğu eritiyor -15.7K/sa, `/api/kanit/toplu` cap 100; test 12/12)
 - **#5 İlk canlı mesh + shard disiplini — DONE ✅** (17 Eyl: miner-b gossip bağlı, claimler newscrawl 1.72M'de, istek 0.76/sn/miner, kilit 0ms)
-- **Canlı (17 Eyl 13:50):** 2.735M kanıt, kuyruk 168K (eriyor), 136.941 batch, 259.55 NEMES, 3 miner (1.21M/1.23M/299K pay)
+- **Canlı (18 Eyl 19:00):** 4.30M kanıt, denetim birikimi ~88K (FIFO eriyor, en eski ~50sa), 434.5+ NEMES, 3 miner (1.93M/1.72M/647K pay)
 
 ## TAMAMLANAN ✅
 
 ### 1. Site v3 — Kurumsal Seviye
 - **Tema Sistemi**: Beyaz/Siyah + Altın sabit, Sistem tercihi (sistem tercihine göre), FOUC'suz
 - **8 Dil**: EN TR DE FR ES RU AR ZH — Sağ üst dil menüsü, localStorage, AR RTL otomatik
-- **Manifesto**: 103 anahtar, 13K kelime × 7 dil = %100 kapsama (EN fallback)
+- **Manifesto**: sayfa henüz yok (nav_manifesto ölü anahtar); çeviriler sayfa açılınca (bkz. KALAN-1)
 - **Video**: 180s (4K 41M + 1080p 24M), müzik loop düzeltildi (aloop), encode bitti
 - **Tarife**: `$5/$15/$40` kaldırıldı → **NEMES-FREE** (Tescilli, tüm hakları saklıdır, %1) / **NEMES-ENTERPRISE** (100% Sovereign, şirketler için ücretli, H=gelir×%50)
 
@@ -43,9 +43,9 @@
 - **Pipeline**: TAMAM ✅ (08 Eyl 10:50 ilk temiz tur) — yamalı kod + `beyin_sira.service` — enwt/wet_en/paracrawl/caselaw `eksik-kaynak` işaretli, diğerleri `tamam` — turlar artık anlık geçiyor, gerçek düzeltme gelince ilgili done silinip retry edilir
 - **Disk**: /srv/beyin 105G boş / 916G (%89) — 07 Eyl 15:47 — / 325G boş — 01 Eyl'deki 132G'den düştü, takipte
 - **Isı/Güç**: GPU 60°C, 150W limit, %100, VRAM 6.4/11G — CPU powersave 2.96GHz, Tctl ~58°C — stabil
-- **Embed API**: 6× llama-server (1241-1246) + bundle :1251 — idle, restart yok
+- **Embed API**: llama-server 1241/1242/1247 canlı (bekçi yönetiminde); 1243-1246/1251/bundle kapalı
 - **Testnet**: komuta-rs x2 + 2 miner canlı (bugün 01:42'den beri)
-- **Miner v0.2.0**: Tauri iskelet + Komuta API hazır (NemesXSpace/miner/, /srv/beyin/kaynaklar/komuta_api.py) — imzalı NSIS, HF 4 model, Ollama gibi pull
+- **Miner v0.2.0**: Rust CLI tek-hat (Tauri iskelet + komuta_api.py + miner-api 08 Eyl'de donduruldu; miner-api 18 Eyl'de repodan silindi)
 - **P2P görev dağıtımı**: CANLI ✅ (08 Eyl ~11:00 deploy) — komuta+2 miner restart, hata yok — corpus tr tükenik (204) olduğu için ilk duyuru bir sonraki dağıtımda ateşlenecek
 - **S2/S3/S4**: KAPANDI ✅ (08 Eyl) — miner-api üyelikten çıkarıldı, komuta_api.py donduruldu, 6 iskelet `_arsiv/`'de, damıtma ertelendi (Qwen3-LoRA kilit) — `cargo check` temiz
 
@@ -64,8 +64,8 @@
 
 ## SİSTEM DURUMU — 16 Eyl 11:15 CANLI (cc100 KAPANIŞ)
 - cc100_tr embed: TAMAM ✅ 109.271.443 vektör (%101.2, 7.635 atlanan) — 15 Eyl 12 işçi 0'la kapattı, merge 1.3sa + FAISS-24 66dk bitti (ntotal doğrulandı)
-- FAISS: 24 index ✅ (cc100: 4.1G faiss + 834M ids, nlist 1024) — önceki 23 toplam 3.4G
-- Testnet: komuta+2 miner canlı (P2P kodlu binary) — corpus tr tükenik (204)
+- FAISS: 25 index ✅ (cc100 109.3M + madenci üretimi, ~7.4GB)
+- Testnet: komuta+3 miner canlı (P2P kodlu binary) — corpus newscrawl_tr üretimde
 - Site: CANLI ✅ (09 Eyl) — 404 çözüldü (repo private→public + Pages açıldı), root/miner/faq 200
 - İzleme: `nemes-izleme` timer+servis sağlıklı (journal'da 15dk kontroller, 0 alarm) — eski `izle.log` emekli, artık journal'a bakılır
 - Pipeline: `beyin_sira` anlık TAMAM turlarında (günde ~4000 restart normal, hepsi skip) — `sira.log` 18M (çift satır: servis+script ikisi de yazıyor, düşük öncelikli temizlik)
@@ -74,7 +74,7 @@
 - Eğitim: 4750/5900, loss 1.48, ETA ~8sa — bitince 10 soruluk test + final adapter
 - RAM: 30G total — yeterli (damıtma madencide, merkezde değil)
 - Bekçi: beyin_bekci 6 port, nemes-izle 60sn logluyor (NemesXSpace/izle.log — son satırlar 02 Eyl'de kalmış, izle timer durmuş olabilir, kontrol edilecek)
-- Komuta API: /srv/beyin/kaynaklar/komuta_api.py (8787) — iskelet hazır, uvicorn ile test edilecek (eğitim sonrası)
+- Komuta API: komuta-rs (8787) canlı — eski `komuta_api.py` iskeleti 08 Eyl'de donduruldu, dosyası yok
 - Miner: NemesXSpace/miner/ — Tauri + HF 4 model (Qwen3B/Gemma2B/Qwen7B/Qwen14B) — imzalı NSIS planlandı
 - GitHub push ağ sorunu: timeout (beklemede)
 

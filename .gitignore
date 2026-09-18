@@ -45,3 +45,8 @@ Cargo.lock
 .env
 .env.local
 *.local
+
+# Test uretimi DB (cargo test calisma-dizinine birakir; uretim DB degil)
+komuta.db
+*.db-shm
+*.db-wal

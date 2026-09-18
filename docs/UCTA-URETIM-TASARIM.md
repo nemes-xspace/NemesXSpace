@@ -6,7 +6,8 @@
 ## İspatlanan (17 Eyl, bu makine)
 
 - Qwen3-0.6B-Q8_0 (639MB) indirildi (`/srv/beyin/model-uretim/`), demet
-  ikilisiyle :1258'de servis edildi, wiki bağlamıyla RAG→üretim çalıştı
+  ikilisiyle :1258'de servis edildi (deney portu, sonra kapatıldı; canlı
+  embed 1241/1242/1247), wiki bağlamıyla RAG→üretim çalıştı
   (60 token/328ms, 191 tok/s GPU). Döngü mekaniği ispatlı.
 - Kalite: base model geveze/tekrarlı (beklenen). Üretim kalitesi için
   Instruct-ağırlık gerekir (indirilecek) veya base+adapter birleştirme

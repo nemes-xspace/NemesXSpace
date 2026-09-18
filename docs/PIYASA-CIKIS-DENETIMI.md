@@ -8,10 +8,10 @@
 | # | Engel | Kanıt | Kapanış |
 |---|---|---|---|
 | P0-1 | İndirilen miner çalışmıyor | `miner/nemes-x-miner-v0.1.0.zip` = 1.1K, içi README + "Early Access" echo scripti; madencilik kodu YOK | Gerçek Linux binary + kurulum provası (0.5) |
-| P0-2 | Dağıtılacak görev yok | Corpus tr tükenik; canlı miner'lar `bekleniyor` (günlerdir 0 vektör) | Yeni corpus kararı + embed hattı (caselaw hazır, 450 madde) |
-| P0-3 | Dış API bot duvarı | CF 1010 çıplak istemcileri kesiyor (16 Eyl kanıtlı) | Miner UA ✅ devrede + CF WAF-skip (sende, 2 dk) |
+| P0-2 | Dağıtılacak görev yok | ~~Corpus tr tükenik~~ ÇÖZÜLDÜ (18 Eyl): newscrawl_tr üretimde, 4.3M kanıt | Kapandı |
+| P0-3 | Dış API bot duvarı | CF 1010 çıplak istemcileri kesiyor (16 Eyl kanıtlı) | Miner UA ✅ devrede + CF WAF-skip ✅ CANLI (16 Eyl) |
 | P0-4 | Windows istemcisi yok | Ev kullanıcılarının çoğu Windows; `.exe` yok, imza yok (1.3) | Natif .exe + EV sertifika |
-| P0-5 | Ağ tek makinede | 2 miner da kurucu hostta; bağımsız operatör 0; P2P mesh 2 düğümle kanıtlanmadı | Tohum-0 tamamlama + 1 bağımsız düğüm (0.4) |
+| P0-5 | Ağ tek makinede | 3 miner kurucu hostta; bağımsız operatör 0; P2P mesh DONE (B12), Tohum-0 CANLI | 1 bağımsız düğüm (0.4) |
 | P0-6 | Mainnet sabitleri uygulanmadı | Canlıda testnet: 2000 mikro + 5M halving | 1.1 commit + 1 hafta proofsuz izleme |
 
 ## P1 — Lansman öncesi şart (güvensiz çıkış olur)

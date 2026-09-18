@@ -3,6 +3,10 @@
 > "Bitti" tanımı: mainnet canlı + 100+ madenci + H>$0 + 3+ bağımsız operatör.
 > Canlı ölçü: 1.010.754 kanıt, 2 madenci (ikisi de kurucu hostta),
 > 50.942 batch, 25 FAISS.
+>
+> **18 Eyl güncellemesi (bu satır dışındakiler 16 Eyl fotoğrafıdır):**
+> 4.30M kanıt, 3 miner, 434.5+ NEMES. WAF-skip CANLI + Tohum-0 CANLI
+> (aşağıdaki "WAF/tohum DONE" adımları kapandı; kalan: dış prova + operatör #1).
 
 ## Tamamlanma cetveli (cephe bazında)
 

@@ -1,6 +1,11 @@
 # NEMES-X MANİFESTOSU v4 — TAM KAPSAMLI İDDİANAME
 *Paralı Zeka Düzenine Karşı İddianame* — 28 Ağustos 2026
 
+> **TARİHSEL SÜRÜM (18 Eyl notu):** Bu metin 28 Ağu fotoğrafıdır; sayılar
+> (eşik 0.99, `S=V×K` katman katsayısı) o güne aittir. Canlı gerçek:
+> `docs/MANIFESTO-KANITLI.md` (eşik 0.98, flat `S=V`, B27 tier tasarımı).
+> Tarih bütünlüğü için metin değiştirilmedi.
+
 ## ÖNSÖZ: SOYGUNUN ADI
 Dünyada bir düzen kuruldu. Adı "yapay zeka" kondu ama kendisi tekelin en saf hali.
 Bu düzeni üç şirket yönetiyor: **OpenAI (Microsoft), Google, Anthropic.** Üçü de aynı şeyi yapıyor. Açık bilgiyi al, kapat, kirala.
