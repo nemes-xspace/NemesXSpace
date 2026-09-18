@@ -110,6 +110,12 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-18: **Revize Faz B canlı (sigorta + bağışıklık + çiftlik).**
+  Sigorta: hız halkası (10x+mutlak taban) + 503 kapısı + `/health kesik`
+  + 30dk otomatik yarı-açık (testli). Bağışıklık: ret oranına göre spot
+  %10-50 + kanarya %4-20 (5dk turda, testli). Çiftlik: `/api/kayit/toplu`
+  (cap 200) + filo `?cuzdan` + `docs/CIFTLIK-REHBERI.md`. Test 24/24.
+  Binary `.20260918-fazb.bak`'ta; canlıda (`kesik:false`, red yolu ispatlı).
 - 2026-09-18: **Win madenci dirildi (S8).** Taze `.exe` derlendi (toplu/kira/
   mesh bayrakli, `.cargo/config.toml` ile kalici capraz-derleme) + kopru
   uzerinden dosyayla dagitildi. Kritik bulgu: TUI modu (`exe`ye cift tik)

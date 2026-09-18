@@ -28,6 +28,25 @@ const COIN_UNIT: i64 = 1_000_000;
 const BATCH_ODUL_TABAN_MIKRO: i64 = 2_000; // batch basina 0.002 NEMES (kademe 0)
 const HALVING_BATCH: i64 = 5_000_000; // her 5M tamamlanan batch'te odul yariya iner (=100M kanit)
 const SPOT_CHECK_YUZDE: u8 = 10; // kanitlarin %10'u rastgele denetime duser (site ile uyumlu; B-1)
+// B25 bagisiklik: asagidaki atomikler calisma aninda guncellenir (arka-plan
+// gorevi, son 1 saatin ret oranina gore). Tabandan baslar, tavana kadar cikar.
+static SPOT_YUZDE_DINAMIK: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(10);
+static KANARYA_BPBIN_DINAMIK: std::sync::atomic::AtomicU64 =
+    std::sync::atomic::AtomicU64::new(400); // 400bp = %4
+
+/// Bagisiklik eslestirmesi (saf, testli): ret orani -> (spot %, kanarya bp).
+/// Taban (10, 400) -> kaldi %5'te (50, 2000) tavanina dogrusal tirmanir.
+fn bagisiklik_eslestir(ret_orani: f64) -> (u64, u64) {
+    let r = ret_orani.clamp(0.0, 1.0);
+    let spot = (10.0 + r * 800.0).round() as u64;
+    let kanarya = (400.0 + r * 32000.0).round() as u64;
+    (spot.min(50), kanarya.min(2000))
+}
+
+/// Kanarya olasiligi (dagitim aninda okunur).
+fn kanarya_orani() -> f64 {
+    KANARYA_BPBIN_DINAMIK.load(std::sync::atomic::Ordering::Relaxed) as f64 / 10000.0
+}
 const DENETIM_BATCH: i64 = 20; // bir denetim gorevinde en fazla kac kayit (sel tasmamasi icin 5->20, 16 Eyl)
 const DENETIM_ODUL_MIKRO: i64 = 50; // denetim sonucu basina denetci ucreti (0.00005 NEMES)
 const DENETIM_ESIK: f32 = 0.98; // kosinus alti = kaldi
@@ -126,6 +145,8 @@ struct RegisterResp {
 struct HealthResp {
     ok: bool,
     ts: String,
+    /// B25 sigorta durumu (true = dagitim duraklatildi).
+    kesik: bool,
 }
 
 #[derive(Serialize)]
@@ -374,7 +395,8 @@ async fn spot_check_gerekli(pool: &SqlitePool, gorev_id: &str, madde_id: i64) ->
     h.update(&madde_id.to_le_bytes());
     h.update(&salt);
     let digest = h.finalize();
-    (digest.as_bytes()[0] % 100) < SPOT_CHECK_YUZDE
+    let yuzde = SPOT_YUZDE_DINAMIK.load(std::sync::atomic::Ordering::Relaxed) as u8;
+    (digest.as_bytes()[0] % 100) < yuzde.min(100)
 }
 
 /// int8 nicelemeyi geri coz: byte -> min + (b/255)*(max-min). 768 degilse None.
@@ -635,7 +657,86 @@ fn p2p_anahtar_yukle_veya_uret(yol: &str) -> anyhow::Result<[u8; 32]> {
     Ok(tohum)
 }
 
-/// Kilit-bekleme metriği (ölçek gözetimi, 16 Eyl): dagitim_kilidi için toplam
+/// Anormallik sigortasi (B25 revize Faz B): olagan-disi hizlanma gorurse
+/// dagitimi duraklatir (503 + alarm), operator incelemesine birakir.
+/// Normal akista HIC devreye girmez: son 5dk kapanisi, 60dk ortalamasinin
+/// 10 katini VE mutlak tabani (1000/dk) asmadikca kapalidir. 30dk sonra
+/// otomatik yari-acik (saldirm devam ediyorsa yeniden atar).
+/// Durustluk notu: kotalama degil, sigorta (durust ciftlik hissetmez).
+struct DevreKesici {
+    kova: [(i64, i64); 60], // (dakika-no, sayim); eski kova yaslanarak duser
+    kesik_son: i64,         // epoch-sn; 0 = kapali degil
+}
+
+impl DevreKesici {
+    const fn yeni() -> Self {
+        Self { kova: [(0, 0); 60], kesik_son: 0 }
+    }
+
+    fn slot(simdi: i64) -> usize {
+        ((simdi / 60) % 60) as usize
+    }
+
+    /// Batch kapanisini isle; esik asilirsa sigortayi atirir.
+    fn kapanis_kaydet(&mut self, simdi: i64) {
+        let dk = simdi / 60;
+        let s = Self::slot(simdi);
+        if self.kova[s].0 == dk {
+            self.kova[s].1 = self.kova[s].1.saturating_add(1);
+        } else {
+            self.kova[s] = (dk, 1);
+        }
+        let _ = self.degerlendir(simdi);
+    }
+
+    /// Degerlendirme: son 5 TAM dakika toplami, onceki 55 dakikanin
+    /// ortalamasinin 10 kati VE mutlak tabani asarsa true (sigorta atar).
+    fn degerlendir(&mut self, simdi: i64) -> bool {
+        let dk = simdi / 60;
+        let mut son5 = 0i64;
+        let mut onceki = 0i64;
+        for (d, sayi) in self.kova.iter() {
+            if *d == 0 {
+                continue; // hic yazilmamis
+            }
+            let yas = dk.saturating_sub(*d);
+            if yas >= 1 && yas <= 5 {
+                son5 += *sayi;
+            } else if yas > 5 && yas <= 60 {
+                onceki += *sayi;
+            }
+        }
+        // Taban: 55dk pencerede is yoksa oran anlamsiz (ilk saatler / bos ag).
+        if onceki < 100 {
+            return false;
+        }
+        let esik_oran = onceki / 55 * 10 * 5; // 55dk ortalamasinin 10 kati, 5dk'lik
+        const MUTLAK_TABAN_5DK: i64 = 5000; // 1000/dk
+        if son5 > esik_oran.max(MUTLAK_TABAN_5DK) {
+            if self.kesik_son <= simdi {
+                self.kesik_son = simdi + 1800;
+            }
+            return true;
+        }
+        false
+    }
+
+    /// Dagitim acik mi? Sure dolduysa otomatik yari-acik (sifirla).
+    fn dagitim_acik(&mut self, simdi: i64) -> bool {
+        if self.kesik_son == 0 || simdi >= self.kesik_son {
+            self.kesik_son = 0;
+            return true;
+        }
+        false
+    }
+
+    fn kesik_mi(&self, simdi: i64) -> bool {
+        self.kesik_son != 0 && simdi < self.kesik_son
+    }
+}
+
+static KESICI: std::sync::LazyLock<std::sync::Mutex<DevreKesici>> =
+    std::sync::LazyLock::new(|| std::sync::Mutex::new(DevreKesici::yeni()));
 /// bekleme + sayım. 500ms üstü tekil warn, her 1000 kilitte ortalama info.
 /// Eşik aşımı = federasyon ihtiyacı sinyali (yol haritası Faz 2).
 static KILIT_TOPLAM_MS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
@@ -752,9 +853,14 @@ fn kosinus(a: &[f32], b: &[f32]) -> f32 {
 // --- Handlers ---
 
 async fn health() -> Json<HealthResp> {
+    let kesik = KESICI
+        .lock()
+        .map(|k| k.kesik_son > current_epoch())
+        .unwrap_or(false);
     Json(HealthResp {
         ok: true,
         ts: Utc::now().format("%m-%d %H:%M:%S").to_string(),
+        kesik,
     })
 }
 
@@ -814,6 +920,65 @@ struct HeartbeatYetenek {
     gpu_ad: Option<String>,
     vram_mb: Option<i64>,
     roller: Option<Vec<String>>,
+}
+
+/// Toplu kayit (B25 ciftlik paketi): bir cuzdana N madenci (cap 200).
+/// Kimlikler ucuzdur (guvenlik ispatta, kimlikte degil); asil deger
+/// ciftligin tek cagrida filosunu acmasidir. Her kalem bagimsiz satirdir.
+const TOPLU_KAYIT_EN_FAZLA: i64 = 200;
+
+#[derive(Deserialize)]
+struct TopluKayitIstek {
+    cuzdan: String,
+    adet: Option<i64>,
+    makine_onek: Option<String>,
+}
+
+async fn register_toplu(
+    State(state): State<Arc<AppState>>,
+    Json(req): Json<TopluKayitIstek>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let cuzdan = req.cuzdan.trim().to_string();
+    if cuzdan.is_empty() || cuzdan.len() > 128 {
+        return Err((StatusCode::BAD_REQUEST, "gecersiz cuzdan".to_string()));
+    }
+    let adet = req.adet.unwrap_or(1).clamp(1, TOPLU_KAYIT_EN_FAZLA);
+    let onek: String = req
+        .makine_onek
+        .unwrap_or_else(|| "ciftlik".to_string())
+        .chars()
+        .take(40)
+        .collect();
+    let now = current_epoch();
+    let mut liste = Vec::with_capacity(adet as usize);
+    for i in 0..adet {
+        let token = Uuid::new_v4().to_string().replace("-", "");
+        let miner_id = format!("miner-{}", &token[..8]);
+        let makine = format!("{}-{:04}", onek, i + 1);
+        sqlx::query(
+            "INSERT INTO miners (miner_id, token, cuzdan, makine_id, created_at, coin_mikro) VALUES (?, ?, ?, ?, ?, 0)"
+        )
+        .bind(&miner_id)
+        .bind(&token)
+        .bind(&cuzdan)
+        .bind(&makine)
+        .bind(now)
+        .execute(&state.pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        sqlx::query(
+            "INSERT INTO ledger (miner_id, delta_mikro, neden, epoch, ts) VALUES (?, 0, 'init', ?, ?)"
+        )
+        .bind(&miner_id)
+        .bind(now)
+        .bind(now)
+        .execute(&state.pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        liste.push(serde_json::json!({ "miner_id": miner_id, "token": token, "makine_id": makine }));
+    }
+    info!("Toplu kayit: {} madenci <- {} ({})", adet, cuzdan, onek);
+    Ok(Json(serde_json::json!({ "adet": adet, "madenciler": liste })))
 }
 
 async fn heartbeat(
@@ -963,6 +1128,16 @@ async fn kira_al(
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     if strike >= STRIKE_LIMIT {
         return Err((StatusCode::FORBIDDEN, "3 strike - gorev akisi kesildi".to_string()));
+    }
+
+    // B25 sigorta: kesikse kira dagitimi durur.
+    {
+        let now_k = current_epoch();
+        if let Ok(mut kesici) = KESICI.lock() {
+            if !kesici.dagitim_acik(now_k) {
+                return Err((StatusCode::SERVICE_UNAVAILABLE, "devre kesik - inceleme suruyor".to_string()));
+            }
+        }
     }
 
     let adet = istek.adet.unwrap_or(KIRA_VARSAYILAN);
@@ -1206,6 +1381,16 @@ async fn gorev(
         return Err((StatusCode::FORBIDDEN, "3 strike - gorev akisi kesildi (operator affeti gerekli)".to_string()));
     }
 
+    // B25 sigorta: kesikse dagitim durur (miner retry ile bekler).
+    {
+        let now_k = current_epoch();
+        if let Ok(mut kesici) = KESICI.lock() {
+            if !kesici.dagitim_acik(now_k) {
+                return Err((StatusCode::SERVICE_UNAVAILABLE, "devre kesik - inceleme suruyor".to_string()));
+            }
+        }
+    }
+
     // Kuyruk biriktiyse ~5 gorevde 1 denetim dagit (es-dogrulama).
     if rand::thread_rng().gen_range(0..5) == 0 {
         if let Some(d) = dagit_denetim(&state, &miner_id).await? {
@@ -1438,7 +1623,7 @@ async fn kira_kur(
         let mut kanarya_kid = 0i64;
         {
             let roll: f64 = rand::thread_rng().gen_range(0.0..1.0);
-            if roll < 0.04 {
+            if roll < kanarya_orani() {  // B25 bagisiklik (dinamik)
                 if let Ok(krow) = sqlx::query("SELECT id, metin FROM kanaryalar WHERE aktif = 1 ORDER BY RANDOM() LIMIT 1")
                     .fetch_optional(&state.pool).await
                 {
@@ -1570,7 +1755,7 @@ async fn gorev_kaydet(
     // Dagitim kanarya_dagitim'a yazilir; disarida gorulurse kaynak bellidir.
     {
         let roll: f64 = rand::thread_rng().gen_range(0.0..1.0);
-        if roll < 0.04 {
+        if roll < kanarya_orani() {  // B25 bagisiklik (dinamik)
             if let Ok(krow) = sqlx::query("SELECT id, metin FROM kanaryalar WHERE aktif = 1 ORDER BY RANDOM() LIMIT 1")
                 .fetch_optional(&state.pool).await
             {
@@ -2387,6 +2572,15 @@ async fn kanit(
     info!("Batch tamam: gorev={} beklenen={} odul={} mikro ({:.6} NEMES) bitiren={}",
           req.gorev_id, beklenen, batch_odul, batch_odul as f64 / COIN_UNIT as f64, miner_id);
 
+    // B25 sigorta besleme: kapanis hiz olcume girer (esikte TEK uyari).
+    if let Ok(mut kesici) = KESICI.lock() {
+        let once = kesici.kesik_son;
+        kesici.kapanis_kaydet(now);
+        if kesici.kesik_son > now && once <= now {
+            warn!("DEVRE KESIK: anormal kapanis hizi (dagitim 30dk duraklatildi)");
+        }
+    }
+
     // B15 mesh duyurusu: bayrakli kanitlar icin atama yayinla.
     // Hata/eksik yoksayilir (eski dagit_denetim yolu aynen calisir).
     {
@@ -2419,18 +2613,30 @@ async fn kanit(
 }
 
 /// Filo gorunumu (B23): madenciler + kabiliyet + canlilik (operator planlamasi).
+/// `?cuzdan=` filtresi (B25 ciftlik paketi): ciftlik filosunu listeler.
 async fn filo(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
+    Query(filtre): Query<std::collections::HashMap<String, String>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
     let _miner_id = token_dogrula(&headers, &state.pool).await?;
     let now = current_epoch();
-    let rows = sqlx::query(
-        "SELECT m.miner_id, m.pay, m.coin_mikro, m.strike, m.itibar, m.last_seen, m.depolama_kota, y.gpu_ad, y.vram_mb, y.roller FROM miners m LEFT JOIN miner_yetenek y ON y.miner_id = m.miner_id ORDER BY m.pay DESC LIMIT 10000",
-    )
-    .fetch_all(&state.pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let rows = if let Some(cuzdan) = filtre.get("cuzdan") {
+        sqlx::query(
+            "SELECT m.miner_id, m.pay, m.coin_mikro, m.strike, m.itibar, m.last_seen, m.depolama_kota, y.gpu_ad, y.vram_mb, y.roller FROM miners m LEFT JOIN miner_yetenek y ON y.miner_id = m.miner_id WHERE m.cuzdan = ? ORDER BY m.pay DESC LIMIT 10000",
+        )
+        .bind(cuzdan)
+        .fetch_all(&state.pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    } else {
+        sqlx::query(
+            "SELECT m.miner_id, m.pay, m.coin_mikro, m.strike, m.itibar, m.last_seen, m.depolama_kota, y.gpu_ad, y.vram_mb, y.roller FROM miners m LEFT JOIN miner_yetenek y ON y.miner_id = m.miner_id ORDER BY m.pay DESC LIMIT 10000",
+        )
+        .fetch_all(&state.pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
+    };
     let liste: Vec<serde_json::Value> = rows
         .iter()
         .map(|r| {
@@ -3368,6 +3574,7 @@ fn app_router(state: Arc<AppState>) -> Router {
     Router::new()
         .route("/health", get(health))
         .route("/api/kayit", post(register))
+        .route("/api/kayit/toplu", post(register_toplu))
         .route("/api/heartbeat", post(heartbeat))
         .route("/api/gorev", get(gorev))
         .route("/api/kira/al", post(kira_al))
@@ -3670,6 +3877,33 @@ async fn main() -> anyhow::Result<()> {
                     let _ = sqlx::query("INSERT INTO ledger (miner_id, delta_mikro, neden, epoch, ts) VALUES (?, ?, 'teklif-iade', ?, ?)")
                         .bind(&mid).bind(stake).bind(now).bind(now).execute(&pool_y).await;
                     warn!("teklif vade dolumu: #{} (iade {} -> {})", tid, stake, mid);
+                }
+                // 1.5 B25 bagisiklik: son 1 saatin ret oranina gore spot+kanarya
+                // siddetini ayarla (basarisiz denetimler artarsa ornekleme artar).
+                {
+                    let top: i64 = sqlx::query_scalar(
+                        "SELECT COUNT(*) FROM kanitlar WHERE dogrulama IS NOT NULL AND ts > ?",
+                    )
+                    .bind(now - 3600)
+                    .fetch_one(&pool_y)
+                    .await
+                    .unwrap_or(0);
+                    if top > 0 {
+                        let kotu: i64 = sqlx::query_scalar(
+                            "SELECT COUNT(*) FROM kanitlar WHERE dogrulama IS NOT NULL AND dogrulama < 0.98 AND ts > ?",
+                        )
+                        .bind(now - 3600)
+                        .fetch_one(&pool_y)
+                        .await
+                        .unwrap_or(0);
+                        let (spot, kanarya) =
+                            bagisiklik_eslestir(kotu as f64 / top.max(1) as f64);
+                        let once_s = SPOT_YUZDE_DINAMIK.swap(spot, std::sync::atomic::Ordering::Relaxed);
+                        let once_k = KANARYA_BPBIN_DINAMIK.swap(kanarya, std::sync::atomic::Ordering::Relaxed);
+                        if once_s != spot || once_k != kanarya {
+                            info!("bagisiklik guncellendi: ret={}/{} spot=%{} kanarya=%{}bp", kotu, top, spot, kanarya);
+                        }
+                    }
                 }
                 // 2. Yeni yoklamalar uret (tur limiti).
                 for _ in 0..YOKLAMA_TUR_LIMIT {
@@ -4555,11 +4789,93 @@ mod tests {
             .fetch_one(&state.pool).await.unwrap();
         assert_eq!(sayi, 1);
         // Filo listeler.
-        let f = filo(State(state.clone()), test_headers("t1")).await.unwrap();
+        let f = filo(State(state.clone()), test_headers("t1"), Query(std::collections::HashMap::new())).await.unwrap().0;
         let liste = f.get("madenci").and_then(|v| v.as_array()).unwrap();
         assert_eq!(liste.len(), 1);
         assert_eq!(liste[0].get("gpu").and_then(|v| v.as_str()), Some("Test GPU 11G"));
         assert_eq!(liste[0].get("roller").and_then(|v| v.as_str()), Some("embed,uretim"));
+    }
+
+    #[test]
+    fn test_sigorta_sessiz() {
+        // B25: normal akis atmaz (60dk x 10/dk).
+        let mut k = DevreKesici::yeni();
+        let t0 = 1_000_000i64 - (1_000_000i64 % 60);
+        for m in 0..60i64 {
+            for _ in 0..10 {
+                k.kapanis_kaydet(t0 + m * 60);
+            }
+        }
+        assert!(k.dagitim_acik(t0 + 3600));
+        assert!(!k.kesik_mi(t0 + 3600));
+    }
+
+    #[test]
+    fn test_sigorta_atar_ve_doner() {
+        // B25: 5dk'da 12000 kapanis (10x + mutlak taban ustu) -> kesik.
+        let mut k = DevreKesici::yeni();
+        let t0 = 2_000_000i64 - (2_000_000i64 % 60);
+        for m in 0..60i64 {
+            for _ in 0..10 {
+                k.kapanis_kaydet(t0 + m * 60);
+            }
+        }
+        for i in 0..12000i64 {
+            k.kapanis_kaydet(t0 + 3600 + (i % 300));
+        }
+        assert!(!k.dagitim_acik(t0 + 3900));
+        assert!(k.kesik_mi(t0 + 3900));
+        // Sure dolunca otomatik yari-acik.
+        assert!(k.dagitim_acik(t0 + 3900 + 1800));
+        assert!(!k.kesik_mi(t0 + 3900 + 1800));
+    }
+
+    #[test]
+    fn test_bagisiklik_eslestir() {
+        // B25: taban, tavan, monotonluk.
+        assert_eq!(bagisiklik_eslestir(0.0), (10, 400));
+        assert_eq!(bagisiklik_eslestir(0.05), (50, 2000));
+        assert_eq!(bagisiklik_eslestir(0.5), (50, 2000));
+        assert_eq!(bagisiklik_eslestir(-1.0), (10, 400));
+        let (a, _) = bagisiklik_eslestir(0.01);
+        let (b, _) = bagisiklik_eslestir(0.02);
+        assert!(b >= a && a >= 10);
+    }
+
+    #[tokio::test]
+    async fn test_toplu_kayit_ve_filo() {
+        // B25: toplu kayit (cap dahil) + cuzdan filtreli filo.
+        let state = test_state().await;
+        let r = register_toplu(
+            State(state.clone()),
+            Json(TopluKayitIstek { cuzdan: "ciftlik-c".to_string(), adet: Some(5), makine_onek: Some("raf".to_string()) }),
+        ).await.unwrap().0;
+        assert_eq!(r.get("adet").and_then(|v| v.as_i64()), Some(5));
+        let madenciler = r.get("madenciler").and_then(|v| v.as_array()).unwrap();
+        assert_eq!(madenciler.len(), 5);
+        assert!(madenciler.iter().all(|m| m.get("token").and_then(|v| v.as_str()).map(|s| s.len()).unwrap_or(0) == 32));
+        // Cap: 500 istense 200 doner.
+        let r = register_toplu(
+            State(state.clone()),
+            Json(TopluKayitIstek { cuzdan: "ciftlik-c".to_string(), adet: Some(500), makine_onek: None }),
+        ).await.unwrap().0;
+        assert_eq!(r.get("adet").and_then(|v| v.as_i64()), Some(200));
+        // Filo filtresi: cuzdan ciftlik-c -> 205 satir.
+        let mut f = std::collections::HashMap::new();
+        f.insert("cuzdan".to_string(), "ciftlik-c".to_string());
+        // token: ilk madencinin tokeni.
+        let tok: String = sqlx::query_scalar("SELECT token FROM miners LIMIT 1")
+            .fetch_one(&state.pool).await.unwrap();
+        let mut h = HeaderMap::new();
+        h.insert("authorization", format!("Bearer {}", tok).parse().unwrap());
+        let f = filo(State(state.clone()), h, Query(f)).await.unwrap().0;
+        assert_eq!(f.get("sayi").and_then(|v| v.as_i64()), Some(205));
+        // Bos cuzdan red.
+        let red = register_toplu(
+            State(state.clone()),
+            Json(TopluKayitIstek { cuzdan: "  ".to_string(), adet: Some(2), makine_onek: None }),
+        ).await;
+        assert!(red.is_err());
     }
 
     #[tokio::test]

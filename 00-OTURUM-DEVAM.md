@@ -108,6 +108,8 @@ b1b3770 GPU geri | 26def41 GPU 300W
 - B22. KAPANDI ✅ (17 Eyl v1 + 18 Eyl v2): Instruct merdiveni ispatlandı (0.6B-geveze → 1.7B-tutarlı → 1.7B-Instruct sınırlı+gerekçeli, tanığa uygun). Modeller `/srv/beyin/model-uretim/`de (3.5G).
 - B23. KAPANDI ✅ (17 Eyl): kabiliyet ilanı canlı (migration 015 + /api/filo, test 19/19). Eşleşme B23b'de (ilk metin-dışı görevde).
 - B24. KAPANDI ✅ (18 Eyl): kart okuyucu v1 (`nemes-kart`: hazırla/aç/kapat/sarmala, loop E2E ispatlı, PIN akışı). Gerçek kart mührü + göç onayı operatörde.
+- B25. KAPANDI ✅ (18 Eyl revize Faz B): sigorta + bağışıklık + çiftlik paketi (test 24/24, canlıda).
+- D+. TUI arayüz kararı (18 Eyl, operatör beyanı): mock GÖRÜNÜM korunacak, içi canlı veriye bağlanacak (`durum` kanalı hazır, `full_tui_mine` beslenecek). İleride.
 - B11. KAPANDI ✅ (17 Eyl 21:41): gece nöbeti devrede (18 tur, kuyruk+RSS+OOM sütunlu).
 
 ### SENDEN (operatör)
