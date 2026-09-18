@@ -1,4 +1,4 @@
-// Copyright (c) 2026 NEMES-X. All Rights Reserved. Unauthorized use prohibited.
+// Copyright 2026 NEMES-X. SPDX-License-Identifier: Apache-2.0.
 use clap::{Parser, Subcommand};
 use miner_core::{get_gpu_info, MiningStats, WorkerState, MINER_USER_AGENT};
 use std::time::Duration;

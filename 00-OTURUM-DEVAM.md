@@ -120,6 +120,13 @@ b1b3770 GPU geri | 26def41 GPU 300W
 - B32. KAPANDI ✅ (18 Eyl): yuk-uret canlı-port bypass (path-son-eki) → URL-parse guard + testli; backup-db.py ölü-değişken + 600-chmod; backup-db.sh (referanssız çift) silindi; yedek 9×644→600; scriptler 775→755/644; nemes-kart mlock kopya-bug (`bytes(buf)` → `from_buffer`).
 - Tur-4 KAPSAMLI tarama (18 Eyl): 5 paralel ajan, 117 dosya envanterli. 30+ gerçek düzeltme (kod+güvenlik+doc+site, yukarıda). 11 FANTOM düşürüldü (TO1 frenli/frensiz ayrımıydı, U1 tarihli deney kaydıydı, O1 yanlış dizine bakılmıştı, F1 açık-soruydu, P0b-7b/9/P3-15/P4/DURUM/POOL/es-bid/ru-faq uydurmaydı). Kural pekişti: bulgu grepsiz dosyaya dokunmaz.
 - Test notu: `test_http_denetim_turu` paralel koşuda ~1/6 flake (tekli 24/24; ayrı koşuda 3/3; full-paralel 3/3 sonradan) — kod-değişim kaynaklı değil, zamanlama yarışı; izlemede.
+- B33. KAPANDI ✅ (18 Eyl): `nemes/komut` gossip yolu kabloya bağlandı — `komut_uygula()` ortak uygulayıcı (HTTP+gossip), vade+master+imza kontrolleri HTTP ile eş, tipler idempotent; test eklendi (`test_komut_uygula_gossip`).
+- B34. KAPANDI ✅ (18 Eyl): denetim-turu flake'i KÖKÜNDEN öldürüldü — test wiki 60 maddeydi, bayrak zarı 3+ tur isteyince corpus tükeniyordu (%25 ölçülü); tohum 200 madde → izole 15/15 + full-paralel 5/5.
+- K1. KARAR (18 Eyl, hak sahibi): LICENSE → Apache-2.0 (site 3 noktada zaten vaat ediyordu; 14 kaynak başlığı SPDX'e çevrildi; marka adı korunur). Geri dönüş: tek commit revert.
+- K2. KARAR (18 Eyl): STRICT_DENETIM testnet'te 0 kalır; mainnet açılış commit'inde 1 (listede: MAINNET-GECIS.md §A).
+- B35. AÇIK (18 Eyl): libp2p 0.53→güncel yükseltme (h2/hickory/ring-0.16/webpki-0.101 advisories bu zincirde; audit.toml gerekçeli-istisna ile yeşil, kaldirma bu göreve bağlı).
+- B36. AÇIK (18 Eyl): sqlx 0.7→0.8 yükseltme (RUSTSEC-2024-0363 + rsa-Marvin bu zincirde; sqlite-only runtime'da erişilemez, istisnalı; 0.8 breaking → ayrı test döngüsü ister).
+- B37. KAPANDI ✅ (18 Eyl): reqwest 0.11→0.12 birleşti (rustls-0.23 danışmanlığı öldü); sqlx default-features=false (ölü mysql/postgres kodu derlenmiyor).
 - B11. KAPANDI ✅ (17 Eyl 21:41): gece nöbeti devrede (18 tur, kuyruk+RSS+OOM sütunlu).
 
 ### SENDEN (operatör)

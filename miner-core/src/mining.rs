@@ -1,4 +1,4 @@
-// Copyright (c) 2026 NEMES-X. All Rights Reserved. Unauthorized use prohibited.
+// Copyright 2026 NEMES-X. SPDX-License-Identifier: Apache-2.0.
 use serde::{Deserialize, Serialize};
 use std::time::Duration;
 use base64::{engine::general_purpose::STANDARD as B64_STANDARD, Engine as _};

@@ -1,4 +1,4 @@
-// Copyright (c) 2026 NEMES-X. All Rights Reserved. Unauthorized use prohibited.
+// Copyright 2026 NEMES-X. SPDX-License-Identifier: Apache-2.0.
 //! worker.rs — Mining worker (GPU embed, int8 nicele)
 //! wiki_embed_par.py:30 ile uyumlu niceleme, Md.112 doğrulama payı
 

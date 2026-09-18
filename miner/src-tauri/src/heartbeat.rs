@@ -1,4 +1,4 @@
-// Copyright (c) 2026 NEMES-X. All Rights Reserved. Unauthorized use prohibited.
+// Copyright 2026 NEMES-X. SPDX-License-Identifier: Apache-2.0.
 //! heartbeat.rs — Komuta kalp atışı (45sn, Md.113)
 //! Merkez olmadan miner kilitlenir. Ed25519 imzalı komut doğrular.
 

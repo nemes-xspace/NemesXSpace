@@ -58,7 +58,7 @@
 | 0.13 | Dokümantasyon sitesi (docs.*) | Operatör + madenci + güvenlik bölümleri yayında (eklendi) | 5 | 0 | ben |
 | 0.14 | GPU doygunluğu: 12 sunucu birebir (cc100 SONRASI, koşan işe ellemeden) | 1247-1252 canlı, 12 işçi→12 sunucu 1:1, bekçi PORTLAR+rolling, izleme uçları güncel, VRAM ~5/11GB, sürekli kullanım %80+ | 2 | 0 (mevcut donanım) | ben (cc100 bitiminde) |
 
-**Faz 0 toplam efor:** ~55 adam-gün · **Toplam nakit bütçe:** ~$30 (alan adı) — sıfır bütçe revizyonu (Eyl 2026)
+**Faz 0 toplam efor:** ~53 adam-gün · **Toplam nakit bütçe:** ~$30 (alan adı) — sıfır bütçe revizyonu (Eyl 2026)
 
 **Metrikler (Eki sonu):** düğüm ≥5 (≥3 bağımsız operatör), vektör 60M+, FAISS 24-25, site 8/8 güncel.
 **Çıkış kapısı:** 5 düğüm 7 gün kesintisiz + dışarıdan katılan 1 madenci ilk payını alırsa Faz 1'e geçilir.
@@ -269,10 +269,10 @@
 
 | Faz | Efor (adam-gün) | Nakit bütçe (USD) | Token/treasury kalemi |
 |---|---|---|---|
-| Faz 0 | ~53 | ~2.330 | — |
-| Faz 1 | ~54 | ~3.400 | Genesis likidite 10M NEMES |
-| Faz 2 | ~79 | ~13.000 | DEX likidite 10M NEMES |
-| Faz 3 | ~89 | ~18.000 | — |
+| Faz 0 | ~53 | ~$30 (alan adı) | — |
+| Faz 1 | ~54 | ~$500 (hukuk tavanı, pazarlıkla 0 hedeflenir) | Genesis likidite 10M NEMES |
+| Faz 2 | ~79 | ~$0 (denetim ertelendi, tanıtım organik) | DEX likidite 10M NEMES |
+| Faz 3 | ~89 | ~$500 (spot tavan, onayla) | — |
 | **Toplam** | **~275 adam-gün** | **~$1.000 tavan (hedef $30)** | 20M NEMES (likidite — token, nakit değil) |
 
 *Not (sıfır bütçe revizyonu Eyl 2026): nakit harcama hedefi $0, tavan ~$1.000 (alan adı + pazarlıklı hukuk + opsiyonel spot). Eski ~$36K tahmin geçersizdir. Paralı kalemlerin tamamı topluluk/emek modeline çevrildi; denetim ve işe alım gelire ertelendi.*

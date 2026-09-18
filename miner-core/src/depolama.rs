@@ -1,4 +1,4 @@
-// Copyright (c) 2026 NEMES-X. All Rights Reserved. Unauthorized use prohibited.
+// Copyright 2026 NEMES-X. SPDX-License-Identifier: Apache-2.0.
 //! Depolama katmani kabulu (C4): 100GB baraji + disk sinavi + taahhut dosyasi.
 //!
 //! Kural: sozle degil, sinavla. Miner `--storage` ile kaydolurken komuta

@@ -6,7 +6,7 @@
 | # | Madde | Durum | Kanıt / Eksik |
 |---|---|---|---|
 | 1 | Acceptance criteria | 🟡 | §5 listesi var; formal AC dokümanı YOK → yazılacak |
-| 2 | Testler geçti, kritik yol kapsamlı, flaky yok | 🟡 | 24/24 (tekli stabil; paralel 3/3 sonradan). 1 flake: denetim turu paralel-yarış (~1/6), kök zamanlama, izlemede. Kuyruk-taban testi eklendi |
+| 2 | Testler geçti, kritik yol kapsamlı, flaky yok | ✅ | 25/25 (tekli + paralel). Flake KÖKÜ BULUNDU+ÖLDÜRÜLDÜ: test wiki 60 maddeydi, bayrak zarı 3+ tur isteyince corpus tükeniyordu (%25); tohum 200 madde → 15/15. Kuyruk-taban+gossip-komut testleri eklendi |
 | 3 | Güvenlik taraması temiz, SBOM+lisans | 🟡 | secret: 3 repo+testnet TEMİZ (Tur-4, değersiz özet). miner-api sabit-JWT'si repodan SİLİNDİ. P2P replay kapatıldı (taze-doğrulama). Lisans: 533 dep, GPL/AGPL yok; ring-0.16 belirsiz. Eksik: cargo-audit/cargo-deny + SBOM + LICENSE↔site çelişkisi (operatör) |
 | 4 | Performans hedefleri + yük testi | 🟡 | rampa ölçüldü (370/sn tavan); hedef bildirgesi YOK → yazılacak |
 | 5 | Erişilebilirlik AA | 🟡 | hiyerarsi + odaksal duzeltildi (footer h2, stil korundu); kontrast/ekran-okuyucu denetimi YOK |

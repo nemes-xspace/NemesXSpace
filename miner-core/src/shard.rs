@@ -1,4 +1,4 @@
-// Copyright (c) 2026 NEMES-X. All Rights Reserved. Unauthorized use prohibited.
+// Copyright 2026 NEMES-X. SPDX-License-Identifier: Apache-2.0.
 //! Shard sahipligi (P2P gossip `nemes/shard`).
 //!
 //! Fikir: madenci, kazacagi id araligini mesh'e ILAN eder, komuta bu

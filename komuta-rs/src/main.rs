@@ -1,4 +1,4 @@
-// Copyright (c) 2026 NEMES-X. All Rights Reserved. Unauthorized use prohibited.
+// Copyright 2026 NEMES-X. SPDX-License-Identifier: Apache-2.0.
 use axum::{
     extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
@@ -3512,7 +3512,15 @@ async fn komut(
 
     let payload_json: serde_json::Value = serde_json::from_str(payload)
         .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid payload JSON".to_string()))?;
+    komut_uygula(&state, &payload_json).await?;
 
+    Ok(Json(serde_json::json!({"ok": true, "epoch": epoch})))
+}
+
+/// Komut tip-uygulayici (HTTP + gossip ortak): imza/vade kontrolu DISARIDA,
+/// burada sadece yetki-gerektiren is. Idempotent tipler (affet/imha) tekrar
+/// yayinda cift-uygulamaya dayaniklidir (SET tabanli, artimsal degil).
+async fn komut_uygula(state: &Arc<AppState>, payload_json: &serde_json::Value) -> Result<(), (StatusCode, String)> {
     if let Some(tip) = payload_json.get("tip").and_then(|v| v.as_str()) {
         match tip {
             "dur" => {
@@ -3564,7 +3572,7 @@ async fn komut(
         }
     }
 
-    Ok(Json(serde_json::json!({"ok": true, "epoch": epoch})))
+    Ok(())
 }
 
 // --- Main ---
@@ -3817,15 +3825,50 @@ async fn main() -> anyhow::Result<()> {
                 }
                 while let Ok(ev) = rx.try_recv() {
                     if let NetworkEvent::MessageReceived { from, topic, data } = ev {
-                        if topic != nemes_core::shard::SHARD_TOPIC {
-                            continue;
-                        }
+                        if topic == nemes_core::shard::SHARD_TOPIC {
                         match ShardIlan::json_coz(&data) {
                             Ok(ilan) => match kaydet_ilan(&state2, &ilan, "gossip").await {
                                 Ok((b, e)) => info!("shard ilan gossip: {} [{},{}] <- {} ({})", ilan.corpus, b, e, ilan.miner_id, from),
                                 Err(m) => warn!("shard ilan red ({}): {}", from, m),
                             },
                             Err(e) => warn!("bozuk shard ilani ({}): {}", from, e),
+                        }
+                        } else if topic == "nemes/komut" {
+                            // CLI->komuta gossip komut yolu (B33): HTTP /api/komut ile ES
+                            // kontroller (vade + master + imza). Tipler idempotent oldugu
+                            // icin tekrar-yayin cift-uygulamaz.
+                            match serde_json::from_slice::<serde_json::Value>(&data) {
+                                Ok(cmd) => {
+                                    let epoch = cmd.get("epoch").and_then(|v| v.as_u64());
+                                    let expires = cmd.get("expires").and_then(|v| v.as_u64());
+                                    let payload = cmd.get("payload_json").and_then(|v| v.as_str());
+                                    let sig_b64 = cmd.get("signature_b64").and_then(|v| v.as_str());
+                                    let pubkey_b64 = cmd.get("pubkey_b64").and_then(|v| v.as_str());
+                                    let simdi = current_epoch();
+                                    let taze = match (epoch, expires) {
+                                        (Some(e), Some(x)) => (e as i64) <= simdi + 300 && (x as i64) >= simdi,
+                                        _ => false,
+                                    };
+                                    match (taze, epoch, expires, payload, sig_b64, pubkey_b64) {
+                                        (true, Some(e), Some(x), Some(p), Some(s), Some(k)) if k == state2.master_pubkey_b64 => {
+                                            let msg = komut_mesaj(e as i64, x as i64, p);
+                                            if verify_signed_command(&msg, s, k) {
+                                                match serde_json::from_str::<serde_json::Value>(p) {
+                                                    Ok(pj) => match komut_uygula(&state2, &pj).await {
+                                                        Ok(()) => info!("gossip komut uygulandi epoch={} <- {}", e, from),
+                                                        Err((_, m)) => warn!("gossip komut uygula-hata ({}): {}", from, m),
+                                                    },
+                                                    Err(e2) => warn!("gossip komut payload-bozuk ({}): {}", from, e2),
+                                                }
+                                            } else {
+                                                warn!("gossip komut imza-red ({})", from);
+                                            }
+                                        }
+                                        _ => warn!("gossip komut red ({}): vade/master/alan eksik", from),
+                                    }
+                                }
+                                Err(e) => warn!("bozuk gossip komutu ({}): {}", from, e),
+                            }
                         }
                     }
                 }
@@ -4041,6 +4084,29 @@ mod tests {
         sqlx::query("INSERT INTO miners (miner_id, coin_mikro) VALUES ('m1', 1000)")
             .execute(&pool).await.unwrap();
         pool
+    }
+
+    #[tokio::test]
+    async fn test_komut_uygula_gossip() {
+        // B33: HTTP+gossip ortak uygulayici; bilinmeyen tip Ok, affet/imha
+        // idempotent (tekrar-yayin guvenli).
+        let state = test_state().await;
+        let bilinmeyen = serde_json::json!({"tip": "yok-boyle-tip"});
+        assert!(komut_uygula(&state, &bilinmeyen).await.is_ok());
+        let affet = serde_json::json!({"tip": "affet", "miner_id": "m-yok"});
+        assert!(komut_uygula(&state, &affet).await.is_ok());
+        assert!(komut_uygula(&state, &affet).await.is_ok(), "affet idempotent");
+        sqlx::query("INSERT INTO miners (miner_id, token, cuzdan, makine_id, created_at, coin_mikro) VALUES ('m1', 't', 'c', 'k', 1, 500)")
+            .execute(&state.pool).await.unwrap();
+        let imha = serde_json::json!({"tip": "imha", "miner_id": "m1", "neden": "test"});
+        assert!(komut_uygula(&state, &imha).await.is_ok());
+        let coin: i64 = sqlx::query_scalar("SELECT coin_mikro FROM miners WHERE miner_id = 'm1'")
+            .fetch_one(&state.pool).await.unwrap();
+        assert_eq!(coin, 0, "imha coin sifirlar");
+        let kara: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM kara_liste WHERE miner_id = 'm1'")
+            .fetch_one(&state.pool).await.unwrap();
+        assert_eq!(kara, 1);
+        assert!(komut_uygula(&state, &imha).await.is_ok(), "imha idempotent");
     }
 
     #[tokio::test]
@@ -4493,7 +4559,10 @@ mod tests {
             .execute(&state.wiki)
             .await
             .unwrap();
-        for i in 1..=60i64 {
+        // Flake-koku (25%): wiki 60 maddeydi; bayrak zari 3+ tur istediginde
+        // corpus tukenip kira/al bos donuyordu. 200 madde = 10 tur > dongu
+        // tavani (6); uretim kodu degismez, yalnizca test tohumu.
+        for i in 1..=200i64 {
             sqlx::query("INSERT INTO madde (id, ozet) VALUES (?, ?)")
                 .bind(i)
                 .bind(format!("entegrasyon test maddesi {} sufficiently long text here", i))

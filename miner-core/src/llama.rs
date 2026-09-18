@@ -1,4 +1,4 @@
-// Copyright (c) 2026 NEMES-X. All Rights Reserved. Unauthorized use prohibited.
+// Copyright 2026 NEMES-X. SPDX-License-Identifier: Apache-2.0.
 use std::process::{Command, Stdio};
 use std::path::{Path, PathBuf};
 use std::sync::OnceLock;

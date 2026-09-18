@@ -69,7 +69,7 @@ Madenci GPU'sunu çalıştırır, doğrulanmış her vektör için **pay (share)
 
 | Katman | Güç | Kitle | Lisans | Teknik |
 |--------|-----|-------|--------|--------|
-| **NEMES-Free** | vizyon: 7B sınıfı damıtma (70B ana beyinden; damıtma ERTELENDİ, Qwen3-LoRA kilit — geçmiş başarı gibi okunmasın) | Herkes, bireyler | **Tescilli — Tum Haklari Saklidir, yazili izinle** | 70B ana beyinden damitma + FAISS retrieval |
+| **NEMES-Free** | vizyon: 7B sınıfı damıtma (70B ana beyinden; damıtma ERTELENDİ, Qwen3-LoRA kilit — geçmiş başarı gibi okunmasın) | Herkes, bireyler | **Apache-2.0** (açık kaynak, 18 Eyl hak-sahibi kararı) | 70B ana beyinden damitma + FAISS retrieval |
 | **Modlar** | `default: 3B` (hızlı/telefon) / `high: 30B` (güçlü/API) | Çeşitlilik için | Aynı Free içinde mod seçimi | Tek damıtma, çok mod |
 | **NEMES-Enterprise** | **%100** (70B+ Sovereign) | Şirketler (>1M token/ay veya 20+ çalışan) | **Ücretli** — Cloud API veya **On-Premise** (kendi DC'sinde, yıllık lisans) | Büyük şirket halka açık hattı taciz etmesin |
 
