@@ -99,7 +99,7 @@ b1b3770 GPU geri | 26def41 GPU 300W
 - B13. KAPANDI ✅ (17 Eyl): claim'ler canlı corpus'a çıpalandı (1.72M); istek hızı 0.76/sn/miner + kilit 0ms ölçüldü.
 - B14. KAPANDI ✅ (17 Eyl): toplu-kanıt (`/api/kanit/toplu`, cap 100) — 20 HTTP→1, tekil yol duruyor, test 24/24, canlıda.
 - B15. KAPANDI ✅ (17 Eyl): mesh denetim v1 canlı — duyuru+metin-kapısı+hakem, miner-b 239/7dk, 0 hata. Eski yol duruyor.
-- B16. Defter federasyonu (YENİ, P3, Faz 2): bölge dağıtıcıları + epoch özet mutabakatı. 1M önkoşulu.
+- B16. KAPANDI ✅ (18 Eyl tasarım): federasyon v1 dosyada (bölge+epoch+korunum, tetik: 460/11K eşiği). Kod Faz 2'de.
 - B17. KAPANDI ✅ (17 Eyl): stres tablosu düzeltildi (100x hata + frenli 1M satırı + ölçülü altyapı tablosu).
 - B18. KAPANDI ✅ (17 Eyl): WAN keşif v1 — kad+DHT protokolü, sabit kimlikler (komuta PeerId tohum-0), tohum bayrakları, test ispatlı. S3 (4003 modem) WAN'ı açar.
 - B19. KAPANDI ✅ (17 Eyl): demet gerçekten bağımsız (1.3G, kosinüs 1.0 ispatlı). :1251 kapalı (emir), S4 paketi hazır.
