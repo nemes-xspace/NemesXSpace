@@ -7,7 +7,7 @@
 
 ---
 
-## 1. SON SNAPSHOT — 17 Eyl 2026 21:45 (+03, date ile doğrulandı)
+## 1. SON SNAPSHOT — 18 Eyl 2026 08:10 (+03, date ile doğrulandı)
 
 | Kalem | Durum |
 |---|---|
@@ -17,8 +17,9 @@
 | Denetim-2 | B-4 (salt) + STRICT_DENETIM + BUG-2 + B-5 + parse-resume **canlıda**
   (`618d628`, migration 013 uygulandı, 3/3 servis active) |
 | Testler | miner-core 12/12 + komuta-rs 10/10 (`48986cc`; batch/slash yaşam döngüsü gerçek handler'la) |
-| İzleme | 1 alarm aktif: kuyruk 168K (eriyor, -15.7K/sa). Defter farkı toz eşiğine alındı (195/200 bilgi satırı, 13:49 turu 1 alarm+127M). izleme.py dup-sorgusu gunlukte (15dk tur ~1.3sn/~100M peak) |
-| Komuta OOM | **ÇÖZÜLDÜ 17 Eyl 12:10**: 02:14→11:56 arası 24 OOM-kill (kernel: 17-19G anon RSS). Kök neden `yukle_havuz` her 120sn'de 2.4M satırı `fetch_all` ile RAM'e çekiyordu. Düzeltme: SQL corpus filtresi + 50K parça + id-artımlı ekleme (canlı binary deploy edildi, `.bak` yanında). RSS 12G+swap→**4.5G sabit, 0 swap, 0 kill** (12:10 sonrası). Deploy: `komuta-rs.20260917-havuz.bak` |
+| İzleme | 1 alarm aktif: kuyruk 67K (176K'dan eriyor). Nöbet 06:42'de temiz bitti (18 tur, OOM artışı yok). Toz/defter/emanet suskun. |
+| Komuta OOM | **ÇÖZÜLDÜ 17 Eyl 12:10**: 02:14→11:56 arası 24 OOM-kill (kernel: 17-19G anon RSS). Kök neden `yukle_havuz` her 120sn'de 2.4M satırı `fetch_all` ile RAM'e çekiyordu. Düzeltme: SQL corpus filtresi + 50K parça + id-artımlı ekleme (canlı binary deploy edildi, `.bak` yanında). RSS havuz boyunu izler (~2M vektör≈6G, çoğu swap'ta; B10 takibi). Gece 0 OOM. |
+| Disk | / **118G** boş (%87; dün 148G'ydi, -30G: komuta.db +1.5G + yedek +2G + kalan faili meçhul — baz alındı: docker 31G, snap 24G, cache 26G, qcow2 42G; yarın diff) |
 | Güvenlik | Komuta HTTP localhost-only (`d247ab8`, BIND_ADDR); P2P 4003 açık |
 | Tören | 1024-karakter parola doğrulandı (16 Eyl): diskte kopyası YOK (kartta),
   history/repo sızıntısı YOK; redis: `offline-ceremony/` 3 script |
@@ -34,9 +35,8 @@
 | Hafıza sistemi | Bu dosya + `durum-anlik.sh` + Garanti-8 ✅; anatomi §10 eklendi, tatbikat yapıldı |
 | Arşiv | emb 12x7G + bak 25G + shard 12x2.2G → `/srv/beyin/arsiv_cc100/` (25 dosya, 161G, silinen yok) |
 | Servisler | 6/6 active + beyin_sira (ikisi de betikte sorgulanır) |
-| Llama | 1241+1242+1247 `ok` (sorgu+miner+VM); 1243-1246 kapalı (görev yok, tasarım). **12:10 olayı**: 3 sunucu SIGTERM ile düştü (fail bilinmiyor — OOM değil, bekçi değil; süpheli: LMStudio/masaüstü). Kurtarma: setsid ile ctx-8192 konfigde yeniden başlatıldı. Kapanış: `beyin-sunucu.service` oneshot cgroup-temizliği çocuğu öldürüyordu → `killmode.conf` (KillMode=process, bekçi örneği) eklendi |
-| Miner'lar | Üretimde: a/b 7.6 vec/s + win (miner-fa8edb50 pay 269K, 269K kanıt — hepsi denetim bekliyor). Görev: newscrawl_tr (cursor ~1.43M). 12:10-12:20 arası embed kesintisi (llama çöküşü) atlatıldı, retry ile döndüler |
-| Disk | /srv/beyin **104G** boş (%89; arşiv buraya taşındı), / **210G** boş (%77) |
+| Llama | 7/7 `ok` (1241-1246 + 1247 VM). Not: 5-dk tetikleyici bosluklari dolduruyor (beyin_sira Wants, tasarim). |
+| Miner'lar | Üretimde 3/3: a/b ~7/sn + win ~5/sn (520K kanıt, 48K doğrulanmış-geçti, 0 kaldı). Görev: newscrawl_tr (cursor ~2.2M). |
 | FAISS | 25 index, toplam ~7.4G (cc100 ~4.9G faiss+ids, caselaw 16 Eyl eklendi, diğer 23 ~2.5G) |
 | Yedek | komuta-backup timer günlük çalışıyor (saat ~00:1x bandı); son manuel:
   `yedek/komuta-2026-09-16-manuel-618d628.db` (1.5G) |
