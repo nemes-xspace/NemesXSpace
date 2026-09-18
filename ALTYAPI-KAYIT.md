@@ -488,3 +488,12 @@
   25-index), 8 FANTOM düşürüldü (P0b-10, P0b-2b, P0b-7b, P0b-9, P3-15, P4-ters,
   POOL/es-bid/ru-faq uydurma). Ders: ajan bulgusu grepsiz dosyaya dokunmaz (§12.4).
   B27 merit-tier açıldı. CC (kod artığı 32+21) çözülmeden duruyor — karar operatörde.
+- 2026-09-18: **Tur-4 KAPSAMLI tarama KAPANDI (5 ajan, 117 dosya envanterli).**
+  Gercek: kuyruk-tabani kodda (`max(5,...)`, B28), miner-api silindi (B29),
+  P2P replay+dial+validate (B31), izleme FIFO-alarm (B30), yuk-uret/backup/mlock
+  (B32), 17 dokumanda drift, site odeme/video/KURULUM/SHA/CI (B1-B11 kısmi).
+  11 fantom dusuruldu (ajan uydurmasi; kural: grepsiz dokunma).
+  CANLIYA ALINDI 19:05: komuta-rs+nemes-miner rebuild, .bak-18eyl sakli,
+  restart sirali (minerler->komuta->komuta->minerler), /health+arz yesil,
+  5dk'da 5415 kanit. Acik (operator): LICENSE, yetim mp4/mp3, Y-butce,
+  security.txt mail, STRICT_DENETIM, topic-kablolama, B27, era1-800 takvimi.
