@@ -87,6 +87,10 @@ enum Commands {
         /// Kira adedi (madde sayisi, 20-20000).
         #[arg(long, default_value_t = 2000)]
         kira_adet: i64,
+        /// Isci sayisi (B26 paralel): kira kuyrugu paylasilir, cakisma yok.
+        /// Kirasiz modda her isci bagimsiz ceker (cakisan kanit CONFLICT yer).
+        #[arg(long, default_value_t = 1)]
+        isci: u32,
         /// Depolama dizini (taahhut + parcalar). Bos ise ~/.nemes/depolama;
         /// taahhut yoksa heartbeat parcasiz gider (compute-only).
         #[arg(long, default_value = "")]
@@ -177,10 +181,10 @@ async fn main() -> anyhow::Result<()> {
                 println!("KATMAN: storage (komuta C5 sonrasi bu taahhutu isteyecek)");
             }
         }
-        Some(Commands::Mine { gpu, simple, komuta, token, embed_api, model, corpus, anahtar, shard_adet, p2p_port, p2p_dinle, denetim_mesh, bootstrap, kira, kira_adet, depolama }) => {
+        Some(Commands::Mine { gpu, simple, komuta, token, embed_api, model, corpus, anahtar, shard_adet, p2p_port, p2p_dinle, denetim_mesh, bootstrap, kira, kira_adet, isci, depolama }) => {
             let token = token_coz(&token)?;
             if simple {
-                simple_mine(&gpu, &komuta, &token, &embed_api, &model, &corpus, &anahtar, shard_adet, p2p_port, p2p_dinle, denetim_mesh, &bootstrap, kira, kira_adet, &depolama).await?;
+                simple_mine(&gpu, &komuta, &token, &embed_api, &model, &corpus, &anahtar, shard_adet, p2p_port, p2p_dinle, denetim_mesh, &bootstrap, kira, kira_adet, isci, &depolama).await?;
             } else {
                 full_tui_mine(&gpu, &komuta).await?;
             }
@@ -294,7 +298,7 @@ async fn miner_id_ogren(komuta: &str, token: &str) -> anyhow::Result<String> {
 }
 
 // ——— Basit log (xmrig klasik) — GERCEK IS: gorev al -> embed -> kanit ---
-async fn simple_mine(_gpu: &str, komuta: &str, token: &str, embed_api: &str, model: &str, corpus: &str, anahtar: &str, shard_adet: i64, p2p_port: u16, p2p_dinle: bool, denetim_mesh: bool, bootstrap: &str, kira: bool, kira_adet: i64, depolama: &str) -> anyhow::Result<()> {
+async fn simple_mine(_gpu: &str, komuta: &str, token: &str, embed_api: &str, model: &str, corpus: &str, anahtar: &str, shard_adet: i64, p2p_port: u16, p2p_dinle: bool, denetim_mesh: bool, bootstrap: &str, kira: bool, kira_adet: i64, isci: u32, depolama: &str) -> anyhow::Result<()> {
     use miner_core::{mining_loop, EmbedClient, GorevAlici, KanitGonderici};
     use miner_core::{anahtar_yolu, anahtar_yukle_veya_uret, ilan_imzala, simdi_ms, ShardRelay, SigningKey};
     use miner_core::depolama as dep;
@@ -497,8 +501,29 @@ async fn simple_mine(_gpu: &str, komuta: &str, token: &str, embed_api: &str, mod
     } else {
         None
     };
-    let isci = tokio::spawn(mining_loop(gorev_alici, embed_client, kanit_gonderici, 0, 0, durum_tx, durdur_rx, dep_dir, uyan_rx));
-    tokio::pin!(isci);
+    // B26 paralel isciler: kira kuyrugu paylasilir (cakisma yok); kirasiz
+    // modda her isci bagimsiz ceker (komuta tekillestirir, cakisan CONFLICT yer).
+    let isci_sayisi = (isci as usize).clamp(1, 32);
+    if isci_sayisi > 1 && !kira {
+        eprintln!("uyari: --isci {} kirasiz modda cakisma fireli calisir (--kira onerilir)", isci_sayisi);
+    }
+    if isci_sayisi > 1 {
+        println!("◈ paralel isci: {}", isci_sayisi);
+    }
+    let mut kume = tokio::task::JoinSet::new();
+    for wid in 0..isci_sayisi {
+        kume.spawn(mining_loop(
+            gorev_alici.clone(),
+            embed_client.clone(),
+            kanit_gonderici.clone(),
+            wid,
+            0,
+            durum_tx.clone(),
+            durdur_rx.clone(),
+            dep_dir.clone(),
+            uyan_rx.clone(),
+        ));
+    }
     let mut toplam: u64 = 0;
     let mut son_hiz = 0.0f32;
     let mut son_gorev = String::from("bekleniyor...");
@@ -510,13 +535,13 @@ async fn simple_mine(_gpu: &str, komuta: &str, token: &str, embed_api: &str, mod
     });
     loop {
         tokio::select! {
-            r = &mut isci => {
+            r = kume.join_next(), if !kume.is_empty() => {
                 match r {
-                    Ok(Ok(())) => println!("is sonlandi"),
-                    Ok(Err(e)) => eprintln!("isci hatasi: {}", e),
-                    Err(e) => eprintln!("isci panic: {}", e),
+                    Some(Ok(Ok(()))) => eprintln!("isci bitti (kalan {})", kume.len()),
+                    Some(Ok(Err(e))) => eprintln!("isci hatasi: {}", e),
+                    Some(Err(e)) => eprintln!("isci panic: {}", e),
+                    None => break,
                 }
-                break;
             }
             m = durum_rx.recv() => {
                 match m {

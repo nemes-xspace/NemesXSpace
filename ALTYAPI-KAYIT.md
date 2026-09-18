@@ -110,6 +110,11 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-18: **Paralel worker (B26) + llama gençleştirme dersi.** `--isci N`
+  (kira kuyruğu paylaşımlı, JoinSet, testli). Canlı ölçü: bayat 1241'de
+  4 işçi bile hızlanamadı (~3.5/sn); rolling-restart sonrası a(4 işçi)
+  3.7→~130/sn. Ders: verim = işçi × TAZE sunucu. miner-a'da mesh denetim
+  de açıldı. Binary `.20260918-isci.bak`'ta.
 - 2026-09-18: **Revize Faz B canlı (sigorta + bağışıklık + çiftlik).**
   Sigorta: hız halkası (10x+mutlak taban) + 503 kapısı + `/health kesik`
   + 30dk otomatik yarı-açık (testli). Bağışıklık: ret oranına göre spot

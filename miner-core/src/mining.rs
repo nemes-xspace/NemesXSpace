@@ -754,4 +754,28 @@ mod tests {
         assert!(q.is_empty());
         assert_eq!(lo, 0.0);
     }
+
+    /// B26: kira kuyrugu paylasimi (HTTP'siz birim testi).
+    #[tokio::test]
+    async fn test_kira_kuyruk_once() {
+        let mut a = GorevAlici::new("http://127.0.0.1:9", "x");
+        a.kira_ayarla(true, 2000);
+        a.kira_kuyruk.lock().await.push_back(Gorev {
+            id: "t".to_string(), tip: "embed".to_string(), corpus: "c".to_string(),
+            shard: 0, offset: 0, limit: 0, deadline: 0, payload: None,
+        });
+        // Kuyruktan gelir (HTTP denenmez).
+        let g = a.gorev_al().await.unwrap().expect("kuyruktan gelmeli");
+        assert_eq!(g.id, "t");
+        // Kuyruk bossa kira_doldur basarisiz (olu adres) -> eski yola duser -> o da basarisiz.
+        assert!(a.gorev_al().await.is_err());
+    }
+
+    /// B26: kira kapliyken davranis aynen eski (kuyruk bakilmaz).
+    #[tokio::test]
+    async fn test_kira_kapali_davranis() {
+        let a = GorevAlici::new("http://127.0.0.1:9", "x");
+        // Kuyruga erisilemez (ozel alan); kapaliyken dogrudan HTTP denenir ve basarisiz olur.
+        assert!(a.gorev_al().await.is_err());
+    }
 }
