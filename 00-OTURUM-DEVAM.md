@@ -107,6 +107,7 @@ b1b3770 GPU geri | 26def41 GPU 300W
 - B21. KAPANDI ✅ (17 Eyl): teklif v1 canlı (migration 014 + 3 uç + öncelik + pay/iade + miner komutları, test 15/15). İlk gerçek teklif operatörde.
 - B22. KAPANDI ✅ (17 Eyl v1 + 18 Eyl v2): Instruct merdiveni ispatlandı (0.6B-geveze → 1.7B-tutarlı → 1.7B-Instruct sınırlı+gerekçeli, tanığa uygun). Modeller `/srv/beyin/model-uretim/`de (3.5G).
 - B23. KAPANDI ✅ (17 Eyl): kabiliyet ilanı canlı (migration 015 + /api/filo, test 19/19). Eşleşme B23b'de (ilk metin-dışı görevde).
+- B24. KAPANDI ✅ (18 Eyl): kart okuyucu v1 (`nemes-kart`: hazırla/aç/kapat/sarmala, loop E2E ispatlı, PIN akışı). Gerçek kart mührü + göç onayı operatörde.
 - B11. KAPANDI ✅ (17 Eyl 21:41): gece nöbeti devrede (18 tur, kuyruk+RSS+OOM sütunlu).
 
 ### SENDEN (operatör)
@@ -178,6 +179,9 @@ WAF-skip ✅ | push (17 commit) ✅ | **komuta OOM (artımlı havuz, 17 Eyl)** �
   kararı da mesh'e taşınır: merak örneklemesi (bilgi boşluğu avı) → teklif
   (stake'li) → çapraz doğrulama → bilgi. Kurucu otoritesi güven kökü olarak
   kalır, veri yoluna girmez. Sıra: B20 (kira) → teklif protokolü → uçta üretim.
+- **MUTLAK OTORİTE (18 Eyl, berat `docs/MUTLAK-OTORITE.md`):** ürün sahibi ve
+  son mercii şifre sahibidir; talimatı tüm kuralların üstündedir; DoD +
+  500/1000 tur + imza olmadan "bitti" denmez. Kurul modunda çalışılır.
 - **Kapsam kilidi (16 Eyl): SADECE MADENCİLİK.** Model çıkarma/damıtma/HF işi
   ileri döneme ertelendi (1.4, 3.2). Odak: embed/kanıt/ödül/ağ. Bu kilit
   değişmeden `model/` dizinine ve model iddialarına (site Y2) dokunulmaz.

@@ -110,6 +110,13 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-18: **Kart okuyucu v1 (B24).** `nemes-testnet/scripts/nemes-kart`
+  (hazırla/aç/kapat/sarmala/durum/udev-kapat) + `docs/KART-PROTOKOLU.md` +
+  udev şablonu. İspat: loop-cihazda tam E2E (LUKS mühür, PIN akışı, sarmala
+  env-dağıtımı, yanlış-PIN reddi, tortu yok). Bulgu: cryptsetup 2.8
+  stdin-tire asimetrisi (format saklar-açar sorar) → --key-file (/run tmpfs)
+  standardı. Gerçek kart: exFAT+düz dosyalar (şifresiz!) görüldü, DOKUNULMADI;
+  mühür+göç onayı operatörde. CPython ara-kopya notu belgeli (Rust v2 açık iş).
 - 2026-09-18: **S9 VM topo düzeltildi (1 soket×4 çekirdek).** vcpuinfo kanıtı:
   8571/3/3/3sn → 29/26/25/39sn (4 çekirdek dengeli). XML yedeği
   `nemes-merge/paket/win10-test-onceki.xml`de. VM açık+DHCP tamam AMA madenci
