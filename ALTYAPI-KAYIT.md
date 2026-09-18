@@ -110,6 +110,11 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-18: **Bellek disiplini (B10).** Harita: qemu 8.3G + komuta ~8G
+  (havuz) + llama 7x2.9G + opencode 1G. Tedbirler: drop_caches ile 9.6G
+  nefes; 1243-1246 kapatıldı (+1.1G VRAM); sunucu_baslat.sh yalnız 1241/1242;
+  havuz tavanı (HAVUZ_MAX_VEKTOR, default 1M, testli) — 1.001.203→1M kırpıldı.
+  /api/ara 24 saatte 0 çağrı. Disk -30G faili meçhul; baz yazıldı.
 - 2026-09-17: **Kabiliyet ilanı canlı (B23).** Migration 015 (`miner_yetenek`);
   nabızda `yetenek` (GPU/VRAM/roller, sinirli); `GET /api/filo` filo gorunumu.
   Canlı: 2 madenci "GTX 1080 Ti 11G embed,denetim,depolama,uretim" bildiriyor;
