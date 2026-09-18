@@ -1,0 +1,6 @@
+# Windows capraz derleme (B-eki, 16 Eyl 2026 ilk kullanim; 18 Eyl kalici).
+# Kullanim: cargo build --release --target x86_64-pc-windows-gnu -p nemes-miner
+# Gereksinim: gcc-mingw-w64-x86-64 (x86_64-w64-mingw32-gcc).
+[target.x86_64-pc-windows-gnu]
+linker = "x86_64-w64-mingw32-gcc"
+ar = "x86_64-w64-mingw32-ar"

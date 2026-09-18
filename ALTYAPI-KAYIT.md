@@ -110,6 +110,12 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-18: **Win madenci dirildi (S8).** Taze `.exe` derlendi (toplu/kira/
+  mesh bayrakli, `.cargo/config.toml` ile kalici capraz-derleme) + kopru
+  uzerinden dosyayla dagitildi. Kritik bulgu: TUI modu (`exe`ye cift tik)
+  SABIT MOCK veri gosteriyor (14.2/s, PAY kabul) — gercek is yapmiyor;
+  dogrusu `win-start` (simple). TUI mock D maddesi aciliyet kazandi. Win
+  4 cekirdekte uretimde (~3/sn rampada, gozlemde).
 - 2026-09-18: **Kart okuyucu v1 (B24).** `nemes-testnet/scripts/nemes-kart`
   (hazırla/aç/kapat/sarmala/durum/udev-kapat) + `docs/KART-PROTOKOLU.md` +
   udev şablonu. İspat: loop-cihazda tam E2E (LUKS mühür, PIN akışı, sarmala
