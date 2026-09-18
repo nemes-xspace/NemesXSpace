@@ -482,3 +482,9 @@
 - 2026-09-06: **Miner 204 hatası düzeltildi.** `is_success()` 204'ü geçirip boş
   gövdeyi JSON parse ediyordu (sonsuz EOF hatası). Artık temiz bekleme.
   Sıradaki: C7 (onarım döngüsü) + SONRAKİ KORPUS kararı (Soru 6).
+- 2026-09-18: **Tur-3 paranoid tarama KAPANDI.** 3 paralel ajan ~50 bulgu → satır-satır
+  doğrulamada 11 GERÇEK düzeltildi (manifesto ekonomi 7: era/spot/eşik/vec-toplam;
+  site OG-dup + og:url self; 72 ölü i18n key; rehber K-formülü; WAF-canlı; §5/§10.4
+  25-index), 8 FANTOM düşürüldü (P0b-10, P0b-2b, P0b-7b, P0b-9, P3-15, P4-ters,
+  POOL/es-bid/ru-faq uydurma). Ders: ajan bulgusu grepsiz dosyaya dokunmaz (§12.4).
+  B27 merit-tier açıldı. CC (kod artığı 32+21) çözülmeden duruyor — karar operatörde.
