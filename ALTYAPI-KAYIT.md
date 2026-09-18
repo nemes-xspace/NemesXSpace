@@ -497,3 +497,14 @@
   restart sirali (minerler->komuta->komuta->minerler), /health+arz yesil,
   5dk'da 5415 kanit. Acik (operator): LICENSE, yetim mp4/mp3, Y-butce,
   security.txt mail, STRICT_DENETIM, topic-kablolama, B27, era1-800 takvimi.
+- 2026-09-18 aksam: **Kalanlar turu.**
+  K1 Apache-2.0 (LICENSE + 14 baslik, geri-donus: revert). Yetim mp4/mp3 silindi.
+  security.txt bilinen e-postaya. YOL-butce satirlari revizyona hizalandi.
+  B33 gossip-komut kabloya baglandi (komut_uygula + test). B34 flake KOKTEN
+  cozuldu (test tohumu 60->200, izole 15/15 + paralel 5/5).
+  B37 reqwest 0.12 + sqlx sade. cargo-audit YESIL (gerekceli audit.toml).
+  B35 (libp2p) + B36 (sqlx 0.8) acik gorev. B27 tasarim + MAINNET-GECIS yazildi.
+  DEPLOY ERTELENDI: systemd D-Bus stop/kill cagrilari zaman-asimina ugruyor
+  (servisler saglikli, eski binary ile uretimde). PID1'e dokunulmadi;
+  systemd duzelince yeni binary (release derlendi) sirayla devreye alinacak.
+  Push token bekleniyor (3 repo commitli).
