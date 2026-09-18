@@ -2,6 +2,7 @@
 name = "miner-core"
 version = "0.2.0"
 edition = "2021"
+license-file = "../../LICENSE"
 description = "NEMES Miner Core — paylaşılan mantık (int8, worker, heartbeat, resources)"
 publish = false
 

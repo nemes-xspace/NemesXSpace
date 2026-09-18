@@ -2,6 +2,7 @@
 name = "nemes-miner"
 version = "0.2.0"
 edition = "2021"
+license-file = "../../LICENSE"
 description = "NEMES Miner CLI — Full TUI mining (ratatui) + simple log"
 publish = false
 
