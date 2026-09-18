@@ -105,7 +105,7 @@ b1b3770 GPU geri | 26def41 GPU 300W
 - B19. KAPANDI ✅ (17 Eyl): demet gerçekten bağımsız (1.3G, kosinüs 1.0 ispatlı). :1251 kapalı (emir), S4 paketi hazır.
 - B20. KAPANDI ✅ (17 Eyl): kira canlı (unit-a kirada, dagitim 6x dustu, verim ayni). unit↔id capraz (a=523d3c47, b=a41b0d81).
 - B21. KAPANDI ✅ (17 Eyl): teklif v1 canlı (migration 014 + 3 uç + öncelik + pay/iade + miner komutları, test 15/15). İlk gerçek teklif operatörde.
-- B22. KAPANDI ✅ (17 Eyl v1): mekanik ispat (Qwen3-0.6B :1258'de RAG→üretim 191tok/s) + tasarım dosyası. Kalite Instruct-ağırlık bekliyor (B22b).
+- B22. KAPANDI ✅ (17 Eyl v1 + 18 Eyl v2): Instruct merdiveni ispatlandı (0.6B-geveze → 1.7B-tutarlı → 1.7B-Instruct sınırlı+gerekçeli, tanığa uygun). Modeller `/srv/beyin/model-uretim/`de (3.5G).
 - B23. KAPANDI ✅ (17 Eyl): kabiliyet ilanı canlı (migration 015 + /api/filo, test 19/19). Eşleşme B23b'de (ilk metin-dışı görevde).
 - B11. KAPANDI ✅ (17 Eyl 21:41): gece nöbeti devrede (18 tur, kuyruk+RSS+OOM sütunlu).
 

@@ -30,9 +30,13 @@ merak/teklif (B21) -> baglam topla (RAG: FAISS + wiki, daginik)
 4. Kurucu epoch'u üretim konusunu sinirlayabilir (imha/affet deseni).
 5. GPU'suz madenci uretime katilmaz (embed/denetim/depolama rollerinde kalir).
 
-## Sıradaki işler (B22b+)
+## B22b kalite merdiveni (18 Eyl, ölçüldü)
 
-- Qwen3-0.6B/1.7B-Instruct GGUF indir + kalite karsilastirmasi.
-- Tanik protokolu (B15 mesh-denetim klonu, vektor yerine metin karsilastirmasi).
-- Ogretmen damitim hatti (acik buyuk model -> QLoRA, ucta).
-- Uretim ekonomisi (teklif-odul deseni genisler).
+| Model | Davranış | Hüküm |
+|---|---|---|
+| 0.6B base | tekrar döngüsü ("veya bir içecek içmek" ×6) | mekanik ispat |
+| 1.7B base Q8 | tutarlı Türkçe, sınırsız | ölçek iyileştirir |
+| **1.7B Instruct Q4** | **sınırlı, gerekçeli, dış bilgiyi etiketli** | **tanık döngüsüne uygun** |
+
+Modeller `/srv/beyin/model-uretim/` altında (0.6B-Q8, 1.7B-Q8-base, 1.7B-Instruct-Q4).
+Sıradaki: tanık protokolü + üretim ekonomisi (yukarıdaki faz planı).
