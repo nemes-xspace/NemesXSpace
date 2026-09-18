@@ -119,7 +119,7 @@ b1b3770 GPU geri | 26def41 GPU 300W
 - S6. Site Y2+Y4 kelime onayı (Y2 kapsam kilidine takılıyor — yayınlanmayacaksa kapatılacak).
 - S7. Avukat randevusu (0.9) + emanetçi/GDPR kararları (4 taslak `docs/`da onay bekliyor).
 - S8. Windows .exe/EV + H motoru (ilk ödeyen müşteri).
-- S9. win10-test CPU topo (YENİ, 17 Eyl): 4 soket→1 soket×4 çekirdek (VM kapalıyken XML düzenle + aç). 3 vCPU 3sn toplamda boşta; win ~3-4 kat hızlanır. Komut: `virsh shutdown win10-test`, XML `sockets=1 cores=4`, `virsh start`.
+- S9. KAPANDI ✅ (18 Eyl, VM tarafı): topo 1×4, 4 çekirdek dengeli (29/26/25/39sn). Madenci için 1 çift tık gerekli (win-start.bat, otomatik başlama yok) — sende.
 
 ### AKŞAM GÜNDEMİ (1M paralel-beyin testleri — 17 Eyl operatör isteği)
 Testle ispatlanacak sorular: (1) dağıtıcı kaç req/sn'ye kadar 0ms kilit tutar

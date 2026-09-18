@@ -110,6 +110,13 @@
    paracrawl/caselaw/enwt eksik-kaynak. Komuta tek corpus sunuyor (GOREV_CORPUS).
 
 ## 4. Faz günlüğü
+- 2026-09-18: **S9 VM topo düzeltildi (1 soket×4 çekirdek).** vcpuinfo kanıtı:
+  8571/3/3/3sn → 29/26/25/39sn (4 çekirdek dengeli). XML yedeği
+  `nemes-merge/paket/win10-test-onceki.xml`de. VM açık+DHCP tamam AMA madenci
+  başlamadı (win-start.bat elle tıklama ister, otomatik başlama yok) →
+  operatör 1 çift tık bekliyor. Dönünce hız ~3-4 kat beklenir.
+- 2026-09-18: **nemes-p2p git'e alındı.** 5G dizinde sürümsüz kod riski
+  vardı; ilk kayıt `217de57` (target/, llama.cpp-build, binaries hariç).
 - 2026-09-18: **Bellek disiplini (B10).** Harita: qemu 8.3G + komuta ~8G
   (havuz) + llama 7x2.9G + opencode 1G. Tedbirler: drop_caches ile 9.6G
   nefes; 1243-1246 kapatıldı (+1.1G VRAM); sunucu_baslat.sh yalnız 1241/1242;
