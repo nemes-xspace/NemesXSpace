@@ -28,4 +28,6 @@
 - Saklama: birincil kasa + (öneri) ikinci coğrafyada kapalı kopya.
 - Gözden-geçirme: yılda 1 (içindekiler-hâlâ-doğru-mu denetimi).
 - Açılma koşulu: kalıcı-yokluk + 2 tanık + deftere IR kaydı.
-- Durum (19 Eyl): YAZILMADI — en acil eylem, sahipte.
+- Durum (19 Eyl): REDDEDİLDİ (sahip kararı — mektup yazılmayacak).
+  Sonuç: kalıcı-yokluk senaryosu prosedürsüz kalır; risk sahibi-tarafından
+  taşınır. Gözden-geçirme: 6 ayda bir (karar değişebilir).

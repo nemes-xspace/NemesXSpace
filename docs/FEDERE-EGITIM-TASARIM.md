@@ -16,7 +16,15 @@
 
 - Yok (henüz). DiLoCo/Swarm G0'a girmedi — sıra onlarda.
 
-## Altyapı notları (ölçülü)
+## Ağ-topolojisi kararı (19 Eyl, sahip-varsayımı): DAĞITIK
+
+300 düğüm bir-arada DEĞİL (ev-internetleri). Sonuçlar:
+- Senkron veri-paralelizm ÖLÜ (gecikme + straggler).
+- Boru-hattı-paralelizm (Petals-tarzı) ÖLÜ (düşük-gecikme ister).
+- YAŞAYANLAR: asenkron-FedAvg (35MB-tur, 10-50Mbps-upload'da tur-başı
+  ~10-30sn/düğüm, kademeli-turlar), DiLoCo-seyrek-senkron, mesh-gossip.
+- Tur-zamanlaması: eşzamanlı-değil, kademeli-katılım (straggler-dostu);
+  geride-kalan dışlanmaz, bir-sonraki-tura alınır.
 
 - Eğitim-yığını çalışıyor (torch 2.14+cu126, peft/TRL).
 - Veri: 189K talimat-çifti (`model-v01/train-v01.jsonl`).

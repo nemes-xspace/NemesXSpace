@@ -91,6 +91,7 @@ HAM = [
  ('FR', 'FR-2026-016', '2026-09-19T20:30:00Z', 'FAISS-birlesme duruk (8 Eyl), canli-uretim DBde birikiyor', 'ORTA: cikti aranamiyor; birlestirme el-isi ve kosulmadi', 'URETIM-ANATOMISI.md §5', 'acik (sahipte)', 'denetci'),
  ('CR', 'CR-2026-026', '2026-09-19T21:00:00Z', 'Federe-egitim G0: tek-kart QLoRA-repro gecti', '1.7B/100-adim/673sn, kayip~2.0, adaptor 123MB; uretim etkilenmedi (7654/15dk); GPU %94->%0', 'repro.log + adaptor-dizini + DB-sayimi', 'kapandi', 'denetci'),
  ('CR', 'CR-2026-027', '2026-09-19T21:30:00Z', 'Faz-A: uretim-FAISS otomasyonu (FR-2026-016 kapandi)', 'wiki_maden_tr.faiss 382.687 vektor (ntotal-dogrulamali); sadakat: brute self-rank=1, recall@10=2-3/10 (PQ32-siniri, kayitli); haftalik-timer', 'faiss-olcumler+timer', 'CANLI', 'denetci'),
+ ('DR', 'DR-2026-007', '2026-09-19T22:00:00Z', 'Vasiyet-mektubu REDDI + dagitik-300 varsayimi', 'Mektup yazilmayacak (sahip); kalici-yokluk prosedursuz, risk tasinir, 6-ay-gozden-gecirme. 300 GPU dagitik: senkron/boru-hatti OLU, asenkron-FedAvg/DiLoCo yasar', 'sahip-beyani (bu oturum)', 'yururlukte', 'hak-sahibi'),
 ]
 
 with open(CIKTI, 'w', encoding='utf-8') as f:
