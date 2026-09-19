@@ -74,6 +74,9 @@ HAM = [
  ('RR', 'RR-2026-003', '2026-09-19T08:00:00Z', 'Sureklilik olcumu (bus/3-2-1/tek-kaynak)', 'bus=1, yedek 9-kopya/1-lokasyon/0-uzak, crates.io %100; fork-prova clone+fetch OK', 'SUREKLILIK.md', 'sonraki: eylemler kapaninca', 'denetci'),
  ('RR', 'RR-2026-004', '2026-09-19T08:30:00Z', 'Karsi-istihbarat supurmesi', 'Site/zip/git sizintisiz; DNS CF-arkasi; 401-korluk (olcum yaniltici cikti); opencode.db kirpik-token (kullanilamaz, mudahale yok)', 'KARSI-ISTIHBARAT.md', 'sonraki: aylik OSINT', 'denetci'),
  ('RR', 'RR-2026-005', '2026-09-19T09:00:00Z', 'Zincir kapanisi (P1-P7)', 'Yonetici ozeti + sahipli dongu takvimi + nihai kural politika (§12.4); dongu 2. tura hazir', 'ZINCIR-OZETI.md', 'sonraki: dongu periyoduna gore', 'denetci'),
+ ('CR', 'CR-2026-014', '2026-09-19T10:00:00Z', 'Dalga-1-deploy (R-01..R-08+R-11)', 'systemd duzeldi; tum binaryler yenilendi (.bak4); canli-dogrulama: CORS-kilit, ara-401, http-red-log, uretim', 'journal + curl cikti (bu oturum)', 'CANLI', 'denetci'),
+ ('CR', 'CR-2026-015', '2026-09-19T10:00:00Z', 'R-02 indirici-silme + R-08 atomik-claim + R-06 IP-middleware', 'URL olu cikti (404); claim rows_affected; middleware 4xx/5xx-only', '27/27 test + canli prob', 'CANLI', 'denetci'),
+ ('IR', 'IR-2026-006', '2026-09-19T10:00:00Z', 'AIDE 22sa tarama = D-Bus bogulma koku', 'Mudahale: 90_nemes_data istisnasi + takilmis tarama olduruldu; dogrulama bu-gece-timer', 'R-11 izlemede', 'denetci'),
 ]
 
 with open(CIKTI, 'w', encoding='utf-8') as f:

@@ -233,64 +233,11 @@ pub fn blake3_dosya(yol: &Path) -> Result<String> {
     Ok(blake3::hash(&veri).to_hex().to_string())
 }
 
-/// llama-server'ı indir ve `binaries/` klasörüne koy
-pub fn download_llama_server() -> Result<PathBuf> {
-    let target_dir = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("binaries");
-    std::fs::create_dir_all(&target_dir)?;
-
-    let (url, filename) = if cfg!(target_os = "windows") {
-        ("https://github.com/ggerganov/llama.cpp/releases/download/b4500/llama-b4500-bin-win64-cuda.zip", "llama-server.exe")
-    } else if cfg!(target_os = "macos") {
-        ("https://github.com/ggerganov/llama.cpp/releases/download/b4500/llama-b4500-bin-macos.zip", "llama-server")
-    } else {
-        // Linux - CUDA veya Vulkan versiyonu
-        if std::path::Path::new("/usr/bin/nvidia-smi").exists() {
-            ("https://github.com/ggerganov/llama.cpp/releases/download/b4500/llama-b4500-bin-ubuntu-cuda.zip", "llama-server")
-        } else {
-            ("https://github.com/ggerganov/llama.cpp/releases/download/b4500/llama-b4500-bin-ubuntu-vulkan.zip", "llama-server")
-        }
-    };
-
-    let zip_path = target_dir.join(filename);
-    
-    // İndir
-    println!("llama-server indiriliyor: {}", url);
-    let response = blocking::get(url)?;
-    let bytes = response.bytes()?;
-    let mut file = std::fs::File::create(&zip_path)?;
-    std::io::copy(&mut std::io::Cursor::new(&bytes), &mut file)?;
-    
-    // Çıkar (zip)
-    let file = std::fs::File::open(&zip_path)?;
-    let mut archive = zip::ZipArchive::new(file)?;
-    for i in 0..archive.len() {
-        let mut file = archive.by_index(i)?;
-        let outpath = target_dir.join(file.mangled_name());
-        if file.is_dir() {
-            std::fs::create_dir_all(&outpath)?;
-        } else {
-            if let Some(parent) = outpath.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-            let mut outfile = std::fs::File::create(&outpath)?;
-            std::io::copy(&mut file, &mut outfile)?;
-        }
-    }
-    
-    // Binary'yi doğru yere taşı
-    let binary_path = target_dir.join(LlamaServer::binary_name());
-    std::fs::rename(target_dir.join("llama-server"), &binary_path).ok();
-    std::fs::remove_file(&zip_path).ok();
-    
-    // Linux'ta execute permission
-    #[cfg(not(target_os = "windows"))]
-    {
-        use std::os::unix::fs::PermissionsExt;
-        std::fs::set_permissions(&binary_path, std::fs::Permissions::from_mode(0o755))?;
-    }
-    
-    Ok(binary_path)
-}
+/// R-02 (19 Eyl): `download_llama_server` KALDIRILDI.
+/// Gerekce: (1) URL'ler olu (b4500 yayini yok, 404); llama.cpp artik
+/// hazir-binary dagitmiyor. (2) Hash/imza dogrulamasiz indirme RCE
+/// seklindeydi. Gomme sunucusu NEMES-bundle ile dagitilir; miner yalnizca
+/// `--embed-api` HTTP ucuna baglanir (ag-izolasyonlu, calistirma yok).
 
 #[cfg(test)]
 mod tests {

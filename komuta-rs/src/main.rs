@@ -2126,6 +2126,21 @@ async fn dagit_denetim(state: &Arc<AppState>, auditor: &str) -> Result<Option<Go
     for (i, r) in secilen.iter().enumerate() {
         let gid: String = r.get("gorev_id");
         let mid: i64 = r.get("madde_id");
+        // R-08 atomik claim: ayni kayda iki denetci kosmasin (%12,8 409
+        // israfi). Ilk yazan alir; kaybeden satiri atlar (asagida continue).
+        let claimed = sqlx::query(
+            "UPDATE kanitlar SET son_denetci = ? WHERE gorev_id = ? AND madde_id = ? AND dogrulama IS NULL AND (son_denetci IS NULL OR son_denetci != ?)"
+        )
+        .bind(auditor)
+        .bind(&gid)
+        .bind(mid)
+        .bind(auditor)
+        .execute(&state.pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+        if claimed.rows_affected() == 0 {
+            continue; // baskasi kapti (veya aradan sonuclandi)
+        }
         let corpus = gid.split(':').next().unwrap_or(&state.corpus).to_string();
         if i == 0 {
             ilk_corpus = corpus.clone();
@@ -3702,8 +3717,34 @@ fn app_router(state: Arc<AppState>) -> Router {
                 ]),
         )
         .layer(tower_http::limit::RequestBodyLimitLayer::new(512 * 1024))
+        .layer(axum::middleware::from_fn(ip_log_middleware))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
+}
+
+/// R-06: 4xx/5xx yanitlarinda IP+yol logla (S3 token-taklit tespiti).
+/// Basarili istekler loglanmaz (gurultu yok, gizlilik korunur).
+async fn ip_log_middleware(
+    req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> axum::response::Response {
+    let yol = req.uri().path().to_string();
+    let ip = req
+        .headers()
+        .get("cf-connecting-ip")
+        .and_then(|v| v.to_str().ok())
+        .map(|s| s.to_string())
+        .or_else(|| {
+            req.extensions()
+                .get::<ConnectInfo<std::net::SocketAddr>>()
+                .map(|c| c.0.ip().to_string())
+        })
+        .unwrap_or_else(|| "-".to_string());
+    let resp = next.run(req).await;
+    if resp.status().is_client_error() || resp.status().is_server_error() {
+        warn!("http-red {} {} ip={}", resp.status().as_u16(), yol, ip);
+    }
+    resp
 }
 
 #[tokio::main]
