@@ -85,6 +85,7 @@ HAM = [
  ('CR', 'CR-2026-021', '2026-09-19T17:00:00Z', 'Prompt14: talep-proseduru+S7-brief (avukat-degilim notuyla)', 'Mütalaa YOK; iskelet+sorular yazildi; privacy.html madenci-kapsamli (kismi-olumlu)', 'dokuman', 'taslak (hukuk-onayi bekler)', 'denetci'),
  ('CR', 'CR-2026-022', '2026-09-19T18:00:00Z', 'Prompt15-revize: AI-sinir politikasi + uyum-olcumu', '7 yasak olculdu (hepsi uyumlu); nabiz-dokunulmazlik kurali; otomatik-kilit N/A-gerekceli', 'remote/push-akisi + oturum-gecmisi', 'yururlukte', 'denetci'),
  ('CR', 'CR-2026-023', '2026-09-19T18:30:00Z', 'Prompt16-revize: switch-ENV + git-ifsasi-kabulu', 'Esik koddan cikti; commit-ritmi ifsasi yazili-kabul (6-ay gozden-gecirme)', 'izleme-ciktisi+git-log', 'yururlukte', 'denetci'),
+ ('CR', 'CR-2026-024', '2026-09-19T19:00:00Z', 'Prompt17: regresyon-batarya + R-REG-01 + R-08-etkinlik', '27x6, audit, CI, SHA, zincir, canli-prob; README-hash regresyonu yakalandi-duzeltildi; 409 %12.8->%0; bagimsizlik-yapisal-eksik (sahip-gozu bekler)', 'test-ciktilari+olcumler', 'dogrulandi-kismen', 'denetci'),
 ]
 
 with open(CIKTI, 'w', encoding='utf-8') as f:
