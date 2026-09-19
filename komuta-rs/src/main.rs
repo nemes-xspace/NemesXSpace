@@ -151,6 +151,10 @@ struct HealthResp {
     ts: String,
     /// B25 sigorta durumu (true = dagitim duraklatildi).
     kesik: bool,
+    /// Derin-saglik (Prompt 10): DB ping ms + baglanti havuzu.
+    /// Degerler buyurse izleme alarm uretir (esik izleme.py'de).
+    db_ms: i64,
+    havuz_boyut: u32,
 }
 
 #[derive(Serialize)]
@@ -897,15 +901,22 @@ fn kosinus(a: &[f32], b: &[f32]) -> f32 {
 
 // --- Handlers ---
 
-async fn health() -> Json<HealthResp> {
+async fn health(State(state): State<Arc<AppState>>) -> Json<HealthResp> {
     let kesik = KESICI
         .lock()
         .map(|k| k.kesik_son > current_epoch())
         .unwrap_or(false);
+    let t0 = std::time::Instant::now();
+    let db_ok = sqlx::query_scalar::<_, i64>("SELECT 1")
+        .fetch_one(&state.pool)
+        .await
+        .is_ok();
     Json(HealthResp {
-        ok: true,
+        ok: db_ok,
         ts: Utc::now().format("%m-%d %H:%M:%S").to_string(),
         kesik,
+        db_ms: t0.elapsed().as_millis() as i64,
+        havuz_boyut: state.pool.size(),
     })
 }
 

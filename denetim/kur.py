@@ -78,6 +78,7 @@ HAM = [
  ('CR', 'CR-2026-015', '2026-09-19T10:00:00Z', 'R-02 indirici-silme + R-08 atomik-claim + R-06 IP-middleware', 'URL olu cikti (404); claim rows_affected; middleware 4xx/5xx-only', '27/27 test + canli prob', 'CANLI', 'denetci'),
  ('IR', 'IR-2026-006', '2026-09-19T10:00:00Z', 'AIDE 22sa tarama = D-Bus bogulma koku', 'Mudahale: 90_nemes_data istisnasi + takilmis tarama olduruldu; dogrulama bu-gece-timer', 'R-11 izlemede', 'denetci'),
  ('CR', 'CR-2026-016', '2026-09-19T10:30:00Z', 'Prompt9: imza+kanarya+sandbox+SBOM+LICENSE+IR', 'SHA256SUMS.sig (Good signature); kanarya-credential (uyuyor); 3 sandbox drop-in (canli, hatasiz); SBOM 395+300; LICENSE 2 repoya; IR-PLAN', 'journal+sig-dogrulama+test', 'CANLI', 'denetci'),
+ ('CR', 'CR-2026-017', '2026-09-19T11:00:00Z', 'Prompt10: derin-saglik+kaos-olcum+ADR-004', 'db_ms/havuz_boyut canli (0); restart-uretim 26sn/2dk; graceful-degradation kanitli; yapilmadilari gerekceli', 'curl+journal+27/27', 'CANLI', 'denetci'),
 ]
 
 with open(CIKTI, 'w', encoding='utf-8') as f:
