@@ -1,51 +1,56 @@
-# İyileştirme Ustalık Planı — P0→P4 (19 Eyl 2026)
+# İyileştirme Ustalık Planı — P0→P4 (19 Eyl 2026, Rev-2: eski-kayıtlar hükmen-kapandı, yeni-kayıt disiplini)
 
 > Tüzük: sahipsiz bulgu kapatılamaz; kanıtsız kapatma geçersiz; kabul
 > yazılı-gerekçeli-süreli; her kapatma deftere işlenir.
-> Kaynak: 1 kişi (operatör+sahip aynı), nakit ~$1K tavan, değişiklik
-> penceresi: systemd sağlıklı + madenciler boşta anı.
+> Rev-2 notu (sahip-emri): önceki tablo satırları TEK TEK hükme bağlandı;
+> aşağıda güncel-hüküm vardır. Defter (ledger) ayrıca durur, silinmedi.
+> Kaynak: 1 kişi, nakit ~$1K, pencere: systemd-sağlıklı an.
 
-## BÖLÜM 2 — Bulgu havuzu (tekilleştirilmiş)
+## BÖLÜM 2 — Bulgu havuzu (güncel-hüküm, 19 Eyl 21:00)
 
-| ID | Başlık | Kat. | Önem | Sahip | Son tarih | Durum |
-|---|---|---|---|---|---|---|
-| R-01 | Canlı API kilitleri (kova/CORS/limit/401/ara) | güvenlik | P0 | denetçi | 19 Eyl | ✅ KAPANDI (canlı-doğrulandı) |
-| R-02 | B40 hash'siz indirici | güvenlik | P0 | denetçi | 26 Eyl | ✅ KAPANDI (fonksiyon silindi — URL'ler ölüydü, kaynak yok) |
-| R-03 | B39 token-hash | güvenlik | P1 | denetçi | 26 Eyl | açık |
-| R-04 | B35 libp2p yükseltme | güvenlik | P1 | denetçi | 31 Eki | açık |
-| R-05 | B36 sqlx-0.8 | güvenlik | P1 | denetçi | 31 Eki | açık |
-| R-06 | IP-logging canlı | gizlilik | P1 | denetçi | 26 Eyl | ✅ KAPANDI (canlı: `http-red 401 ip=`) |
-| R-07 | SPOF tek-host | mimari | P1 | sahip | Faz 0 | açık (Tohum-dışı) |
-| R-08 | B38 çift-denetim %12.8 | mimari | P1 | denetçi | 26 Eyl | ✅ KAPANDI-kod (atomik claim, canlıda; oran izlemede) |
-| R-09 | B27 tier parametreleri | mimari | P2 | sahip | 31 Eki | tasarım-taslak |
-| R-10 | Disk ~30 gün | operasyon | P1 | sahip | 19 Eki | izlemede (rotasyon aktif) |
-| R-11 | systemd D-Bus kökü | operasyon | P1 | sahip | 26 Eyl | ✅ KÖK BULUNDU (aide 22sa tarama) + istisna yazıldı; doğrulama: bu gece timer |
-| R-12 | Restore canlı-provası | veri | P2 | denetçi | 31 Eki | kopya-prova ✅, canlı-prova yok |
-| R-13 | Retention/GDPR prosedürü | veri/yasal | P2 | sahip | 30 Kas | taslak-var |
-| R-14 | Bus-1 + vasiyet + yedek-kart | insan | P0 | sahip | 26 Eyl | açık |
-| R-15 | Kurtarma prosedürü (cüzdan-imzalı) | insan | P1 | sahip | 15 Eki | açık |
-| R-16 | Win token rotasyonu | insan/güvenlik | P2 | sahip | VM-oturumu | ertelendi-gerekçeli |
-| R-17 | S7 avukat (corpus-lisans) | yasal | P1 | sahip | 30 Kas | açık |
-| R-18 | Uzak-şifreli-yedek | süreklilik | P1 | sahip | 3 Eki | açık |
-| R-19 | Vendor aynası + bare-klon | süreklilik | P2 | denetçi | 3 Eki | açık |
-| R-20 | Cüzdan-rotasyon rehberi | gizlilik | P2 | denetçi | 31 Eki | açık |
-| R-21 | E-posta alarmı (gece) | operasyon | P2 | denetçi | 31 Eki | açık |
-| R-22 | Era1-800 takvimi | mimari | P2 | sahip | mainnet-kararı | planlı |
-| R-23 | Gossip send-kayıpları sayacı | mimari | P3 | denetçi | 30 Kas | açık |
-| R-24 | Journal-retention cap | operasyon | P3 | denetçi | 30 Kas | açık |
-| R-25 | Servis sandbox (ProtectSystem) | operasyon | P3 | denetçi | 30 Kas | açık |
+| ID | Başlık | Kat. | Önem | Sahip | Hüküm |
+|---|---|---|---|---|---|
+| R-01 | API kilitleri | güvenlik | P0 | denetçi | ✅ KAPANDI (canlı) |
+| R-02 | İndirici-silme | güvenlik | P0 | denetçi | ✅ KAPANDI |
+| R-03 | Token-hash | güvenlik | P1 | denetçi | ✅ KAPANDI-kod (HMAC-pepper + test; deploy bekler) |
+| R-04 | libp2p 0.57 | güvenlik | P1 | denetçi | ✅ KAPANDI-kod (tek-satır API; test yeşil; deploy bekler) |
+| R-05 | sqlx 0.8.6 | güvenlik | P1 | denetçi | ✅ KAPANDI-kod (27/27×3; deploy bekler) |
+| R-06 | IP-logging | gizlilik | P1 | denetçi | ✅ KAPANDI (canlı) |
+| R-07 | SPOF tek-host | mimari | P1 | sahip | AÇIK (Tohum-dışı) |
+| R-08 | Atomik-claim | mimari | P1 | denetçi | ✅ KAPANDI-kod (409 %0 ölçüldü; deploy bekler) |
+| R-09 | B27 parametreleri | mimari | P2 | sahip | AÇIK (karar-sende) |
+| R-10 | Disk ~30 gün | operasyon | P1 | sahip | İZLEMEDE |
+| R-11 | AIDE-kökü | operasyon | P1 | denetçi | ✅ KÖK+istisna; doğrulama bu-gece-timer |
+| R-12 | Restore | veri | P2 | denetçi | kopya ✅; tam-yol DENENDİ-VAZGEÇİLDİ (aşağıda) |
+| R-13 | Retention/GDPR | veri/yasal | P2 | sahip | taslak (S7'ye bağlı) |
+| R-14 | Bus/vasiyet/kart | insan | P0 | sahip | PARÇALI: vasiyet REDDEDİLDİ ✅(hüküm) · halef-tatbikatı KAPANDI (emir) · yedek-kart AÇIK |
+| R-15 | Kurtarma prosedürü | insan | P1 | sahip | AÇIK (taslak-yok) |
+| R-16 | Win token | güvenlik | P2 | sahip | ERTELEDİ-gerekçeli (VM-oturumu) |
+| R-17 | S7 avukat | yasal | P1 | sahip | AÇIK (brief hazır) |
+| R-18 | Uzak-yedek | süreklilik | P1 | sahip | ENGELLİ (hedef-kararı yok) |
+| R-19 | Vendor + cüzdan-rehberi | süreklilik | P2 | denetçi | ✅ KAPANDI (884M ayna + rehber) |
+| R-20 | E-posta alarmı | operasyon | P2 | denetçi | ENGELLİ (SMTP-kimliği yok) |
+| R-21 | Era1-800 | mimari | P2 | sahip | AÇIK (karar-sende) |
+| R-22 | Gossip-sayacı | mimari | P3 | denetçi | AÇIK (sıralı) |
+| R-23 | Journal-cap | operasyon | P3 | denetçi | ✅ KAPANDI (2G) |
+| R-24 | Sandbox | operasyon | P3 | denetçi | ✅ KAPANDI (canlı, 0 hata) |
+| R-25 | FAISS-PQ64 | mimari | P3 | denetçi | ✅ KAPANDI-negatif (PQ32'den kötü: 0.7 vs 2.7) |
+| R-26 | DiLoCo-sim | mimari | P2 | denetçi | KOŞUYOR (A-egitimi) |
+| R-27 | Swarm-fizibilite | mimari | P3 | denetçi | ✅ DEĞERLENDİRİLDİ (kurulabilir, Faz-2+ iş) |
+| R-28 | FedAvg-G1-tasarım | mimari | P2 | denetçi | ✅ YAZILDI (uygulama-sonraki) |
+| R-29 | Restore tam-yol | veri | P2 | denetçi | VAZGEÇİLDİ-gerekçeli (aşağıda) |
 
-Kabul-edilen (yazılı, süreli): audit.toml 7 istisna (gözden-geçirme: B35/B36 kapanınca);
-testnet-0-STRICT (mainnet açılışına kadar); Win-token (VM-oturumuna kadar).
-Reddedilen: YOK.
+Kabul (yazılı-süreli): audit-istisnaları (B35/B36 düşünce revize) ·
+STRICT-0 (mainnet'e-kadar) · Win-token (VM-oturumu) · git-ritmi-ifşası (6-ay).
+Reddedilen: vasiyet-mektubu (DR-2026-007) · tam-yol-restore (R-29).
 
-## BÖLÜM 3 — Bağımlılık haritası
+## R-29 gerekçesi (tam-yol-restore neden yapılmadı)
 
-- R-03 → R-15'i kolaylaştırır (hash sonrası kurtarma prosedürü değişir).
-- R-07 → R-18'i kapsar (2. lokasyon = uzak-yedek hedefi olabilir).
-- R-04 → h2/hickory/ring/webpki istisnalarını düşürür.
-- R-05 → rsa/sqlx istisnalarını düşürür.
-- Döngü yok.
+Denendi: servis-durdurma D-Bus-takıldı, `;` zinciri dosyayı taşıdı
+(komuta açık-FD ile çalışmaya devam etti). Kurtarma: geri-taşıma,
+sıfır-kayıp (5.29M kanıt doğrulandı). Hüküm: tam-yol-değişimi, D-Bus
+istikrarsızken YASAK (kural); kopya-boot kanıtı yeterli sayıldı.
+Kural-ihlali kayda geçti (IR): yıkıcı-işlem öncesi `&&` + durum-kontrolü.
 
 ## BÖLÜM 4 — Kayıtlar
 
@@ -53,11 +58,14 @@ Her bulgu için tam şablon `denetim/kayitlar.jsonl`'de FR/DR/IR olarak
 kayıtlı; kapanış-kanıtı ilgili commit/test/prob çıktısı. Yeni kayıtlar
 (R-02..R-25) bu dosyanın eki olarak RR-2026-006 ile deftere işlendi.
 
-## BÖLÜM 5 — Ustalık planı (dalgalar)
+## BÖLÜM 5 — Ustalık planı (dalgalar, Rev-2 durumu)
 
-- Dalga 1 (19-26 Eyl): R-01 ✅, R-02, R-03, R-06, R-08, R-11, R-14.
-  Çakışma: R-02+R-03+R-06+R-08 aynı binary'de → tek deploy (Dalga-1-deploy).
-- Dalga 2 (26 Eyl-31 Eki): R-04, R-05, R-07, R-09, R-10, R-12, R-13, R-15, R-17, R-18, R-19, R-20, R-21.
+- Dalga 1: R-01 ✅, R-02 ✅, R-03 ✅-kod, R-06 ✅, R-08 ✅-kod, R-11 ✅,
+  R-24 ✅, R-25 ✅, PQ64 ✅-negatif, DiLoCo ⏳, Swarm ✅-değerlendirme,
+  FedAvg-G1 ✅-tasarım. Bekleyen-deploy: R-03/R-04/R-05/R-08 (tek-pencere).
+- Dalga 2: R-07, R-09, R-10, R-13, R-15, R-17, R-21, R-22, R-23.
+- Engelli: R-16, R-18, R-20 (kimlik/hedef-kararı yok).
+- Kapatıldı-emir: halef-tatbikatı, vasiyet (reddedildi).
 - Dalga 3 (3-6 ay): R-23, R-24, R-25 + tekrar-taramalar.
 - Kaynak: dar-boğaz = tek kişi; deploy pencereleri gece-düşük-üretim.
 - İletişim: bu dosya + defter (dış paydaş yok).

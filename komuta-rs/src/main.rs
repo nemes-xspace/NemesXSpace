@@ -131,6 +131,10 @@ struct AppState {
     /// Oz-denetim engeli (mainnet oncesi acilir): denetci kendi kanitini
     /// denetleyemez. Testnet toleransi icin default kapali (sadece warn).
     strict_denetim: bool,
+    /// B39 token-kasasi: HMAC-pepper (32 bayt). Tokenlar DB'de
+    /// `v1:<hex-hmac>` saklanir; duz-metin ASLA. Pepper dosyasi ayridir
+    /// (DB sizsa yetmez). Kaybi = tum madenciler yeniden-kayit (yedekle!).
+    token_pepper: [u8; 32],
 }
 
 #[derive(Deserialize)]
@@ -341,7 +345,8 @@ async fn odeme_yaz(
     Ok(())
 }
 
-async fn token_dogrula(headers: &HeaderMap, pool: &SqlitePool) -> Result<String, (StatusCode, String)> {
+async fn token_dogrula(headers: &HeaderMap, state: &Arc<AppState>) -> Result<String, (StatusCode, String)> {
+    let pool = &state.pool;
     let auth = headers
         .get("authorization")
         .and_then(|h| h.to_str().ok())
@@ -350,13 +355,42 @@ async fn token_dogrula(headers: &HeaderMap, pool: &SqlitePool) -> Result<String,
     if token.is_empty() {
         return Err((StatusCode::UNAUTHORIZED, "Empty token".to_string()));
     }
+    // B39: once HMAC-karsiligi dene (v1 kayitlar).
+    let hmac = token_hmac(&state.token_pepper, token);
+    let row = sqlx::query("SELECT miner_id FROM miners WHERE token = ?")
+        .bind(&hmac)
+        .fetch_optional(pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    if let Some(r) = row {
+        return Ok(r.get("miner_id"));
+    }
+    // Eski duz-metin kayit: dogrula + AYNI ANDA yukselt (seffaf gecis).
+    // Kanarya satiri bilerek eski-formda kalir (bal-kupu; kullanimi alarm).
     let row = sqlx::query("SELECT miner_id FROM miners WHERE token = ?")
         .bind(token)
         .fetch_optional(pool)
         .await
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    row.map(|r| r.get("miner_id"))
-        .ok_or((StatusCode::UNAUTHORIZED, "Invalid token".to_string()))
+    match row {
+        Some(r) => {
+            let mid: String = r.get("miner_id");
+            if !mid.starts_with("miner-kanarya") {
+                let _ = sqlx::query("UPDATE miners SET token = ? WHERE miner_id = ?")
+                    .bind(&hmac)
+                    .bind(&mid)
+                    .execute(pool)
+                    .await;
+            }
+            Ok(mid)
+        }
+        None => Err((StatusCode::UNAUTHORIZED, "Invalid token".to_string())),
+    }
+}
+
+/// B39: HMAC-blake3(token, pepper) -> `v1:<hex>`. Pepper DB-disinda.
+fn token_hmac(pepper: &[u8; 32], token: &str) -> String {
+    format!("v1:{}", blake3::keyed_hash(pepper, token.as_bytes()).to_hex())
 }
 
 /// Surum kilidi: acik uclar icin IP-bazli kova (Sybil/DB-sisme freni).
@@ -700,7 +734,7 @@ async fn ara(
     headers: HeaderMap,
     Json(req): Json<AraReq>,
 ) -> Result<Json<AraResp>, (StatusCode, String)> {
-    token_dogrula(&headers, &state.pool).await?;
+    token_dogrula(&headers, &state).await?;
     Ok(Json(ara_calistir(&state, &req.sorgu, req.k).await?))
 }
 
@@ -710,7 +744,7 @@ async fn ara_get(
     headers: HeaderMap,
     Query(q): Query<HashMap<String, String>>,
 ) -> Result<Json<AraResp>, (StatusCode, String)> {
-    token_dogrula(&headers, &state.pool).await?;
+    token_dogrula(&headers, &state).await?;
     let sorgu = q.get("q").cloned().unwrap_or_default();
     let k = q.get("k").and_then(|s| s.parse::<usize>().ok());
     Ok(Json(ara_calistir(&state, &sorgu, k).await?))
@@ -976,12 +1010,14 @@ async fn register(
     let token = Uuid::new_v4().to_string().replace("-", "");
     let miner_id = format!("miner-{}", &token[..8]);
     let now = current_epoch();
+    // B39: DB'ye HMAC-karsiligi yazilir; duz-metin SADECE burada, yanitta doner.
+    let saklanacak = token_hmac(&state.token_pepper, &token);
 
     sqlx::query(
         "INSERT INTO miners (miner_id, token, cuzdan, makine_id, created_at, coin_mikro) VALUES (?, ?, ?, ?, ?, 0)"
     )
     .bind(&miner_id)
-    .bind(&token)
+    .bind(&saklanacak)
     .bind(&cuzdan)
     .bind(&makine)
     .bind(now)
@@ -1070,11 +1106,13 @@ async fn register_toplu(
         let token = Uuid::new_v4().to_string().replace("-", "");
         let miner_id = format!("miner-{}", &token[..8]);
         let makine = format!("{}-{:04}", onek, i + 1);
+        // B39: DB'ye HMAC-karsiligi; duz-metin listede doner (tek seferlik).
+        let saklanacak = token_hmac(&state.token_pepper, &token);
         sqlx::query(
             "INSERT INTO miners (miner_id, token, cuzdan, makine_id, created_at, coin_mikro) VALUES (?, ?, ?, ?, ?, 0)"
         )
         .bind(&miner_id)
-        .bind(&token)
+        .bind(&saklanacak)
         .bind(&cuzdan)
         .bind(&makine)
         .bind(now)
@@ -1101,7 +1139,7 @@ async fn heartbeat(
     headers: HeaderMap,
     body: Option<Json<HeartbeatReq>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let miner_id = token_dogrula(&headers, &state.pool).await?;
+    let miner_id = token_dogrula(&headers, &state).await?;
     let now = current_epoch();
     sqlx::query("UPDATE miners SET last_seen = ? WHERE miner_id = ?")
         .bind(now)
@@ -1212,7 +1250,7 @@ async fn kira_al(
     headers: HeaderMap,
     Json(istek): Json<KiraIstek>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let miner_id = token_dogrula(&headers, &state.pool).await?;
+    let miner_id = token_dogrula(&headers, &state).await?;
 
     let kara: Option<String> = sqlx::query_scalar("SELECT neden FROM kara_liste WHERE miner_id = ?")
         .bind(&miner_id).fetch_optional(&state.pool).await
@@ -1284,7 +1322,7 @@ async fn teklif_ver(
     headers: HeaderMap,
     Json(istek): Json<TeklifIstek>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let miner_id = token_dogrula(&headers, &state.pool).await?;
+    let miner_id = token_dogrula(&headers, &state).await?;
     let corpus = istek.corpus.trim().to_string();
     if corpus.is_empty() || istek.bitis <= istek.baslangic {
         return Err((StatusCode::BAD_REQUEST, "gecersiz aralik".to_string()));
@@ -1348,7 +1386,7 @@ async fn bosluklar(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let _miner_id = token_dogrula(&headers, &state.pool).await?;
+    let _miner_id = token_dogrula(&headers, &state).await?;
     let now = current_epoch();
     // Cursor-supurme makasi (bilinen geri kalmislik).
     let son: i64 = sqlx::query_scalar("SELECT son_id FROM gorev_cursor WHERE corpus = ?")
@@ -1411,7 +1449,7 @@ async fn tekliflerim(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let miner_id = token_dogrula(&headers, &state.pool).await?;
+    let miner_id = token_dogrula(&headers, &state).await?;
     let rows = sqlx::query(
         "SELECT id, corpus, baslangic, bitis, stake_mikro, durum, ts FROM teklifler WHERE miner_id = ? ORDER BY ts DESC LIMIT 50",
     )
@@ -1444,7 +1482,7 @@ async fn gorev(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    let miner_id = token_dogrula(&headers, &state.pool).await?;
+    let miner_id = token_dogrula(&headers, &state).await?;
 
     // Kara liste (Guvenlik Md.4): imha edilen gorev de alamaz, kanit da veremez.
     let kara: Option<String> = sqlx::query_scalar("SELECT neden FROM kara_liste WHERE miner_id = ?")
@@ -2275,7 +2313,7 @@ async fn kanit_toplu(
         ));
     }
     // Tekil yolla ayni kapı: once auth, sonra is. (200-icinde-401 deseni B2.)
-    token_dogrula(&headers, &state.pool).await?;
+    token_dogrula(&headers, &state).await?;
     let mut sonuclar = Vec::with_capacity(istekler.len());
     for req in &istekler {
         let mid = req.madde_id;
@@ -2352,7 +2390,7 @@ async fn metin(
     headers: HeaderMap,
     Path(kor): Path<i64>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let _miner_id = token_dogrula(&headers, &state.pool).await?;
+    let _miner_id = token_dogrula(&headers, &state).await?;
     let row = sqlx::query("SELECT gorev_id, madde_id FROM kor_esleme WHERE kor_id = ?")
         .bind(kor)
         .fetch_optional(&state.pool)
@@ -2387,7 +2425,7 @@ async fn kanit(
     headers: HeaderMap,
     Json(req): Json<KanitReq>,
 ) -> Result<Json<KanitResp>, (StatusCode, String)> {
-    let miner_id = token_dogrula(&headers, &state.pool).await?;
+    let miner_id = token_dogrula(&headers, &state).await?;
 
     // Kara liste (Guvenlik Md.4): imha edilen kanit da veremez.
     let kara: Option<String> = sqlx::query_scalar("SELECT neden FROM kara_liste WHERE miner_id = ?")
@@ -2696,7 +2734,7 @@ async fn filo(
     headers: HeaderMap,
     Query(filtre): Query<std::collections::HashMap<String, String>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let _miner_id = token_dogrula(&headers, &state.pool).await?;
+    let _miner_id = token_dogrula(&headers, &state).await?;
     let now = current_epoch();
     let rows = if let Some(cuzdan) = filtre.get("cuzdan") {
         sqlx::query(
@@ -2744,7 +2782,7 @@ async fn status(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
 ) -> Result<Json<StatusResp>, (StatusCode, String)> {
-    let miner_id = token_dogrula(&headers, &state.pool).await?;
+    let miner_id = token_dogrula(&headers, &state).await?;
     let row = sqlx::query("SELECT pay, coin_mikro, strike, itibar FROM miners WHERE miner_id = ?")
         .bind(&miner_id)
         .fetch_one(&state.pool)
@@ -2768,7 +2806,7 @@ async fn bakiye(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
 ) -> Result<Json<BakiyeResp>, (StatusCode, String)> {
-    let miner_id = token_dogrula(&headers, &state.pool).await?;
+    let miner_id = token_dogrula(&headers, &state).await?;
     let row = sqlx::query("SELECT pay, coin_mikro, strike, itibar FROM miners WHERE miner_id = ?")
         .bind(&miner_id)
         .fetch_one(&state.pool)
@@ -2841,7 +2879,7 @@ async fn denetim_liste(
     headers: HeaderMap,
     Query(q): Query<HashMap<String, String>>,
 ) -> Result<Json<DenetimResp>, (StatusCode, String)> {
-    let _denetci = token_dogrula(&headers, &state.pool).await?;
+    let _denetci = token_dogrula(&headers, &state).await?;
     let limit: i64 = q.get("limit").and_then(|s| s.parse().ok()).unwrap_or(20).clamp(1, 100);
     let rows = sqlx::query_as::<_, DenetimKaydi>(
         "SELECT gorev_id, madde_id, miner_id, v_int8_b64, v_min, v_max, ts FROM kanitlar WHERE spot_check = 1 AND dogrulama IS NULL ORDER BY ts ASC LIMIT ?"
@@ -2869,7 +2907,7 @@ async fn kanarya_kontrol(
     headers: HeaderMap,
     Query(q): Query<HashMap<String, String>>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let _miner_id = token_dogrula(&headers, &state.pool).await?;
+    let _miner_id = token_dogrula(&headers, &state).await?;
     let metin = q.get("metin").map(|s| s.trim().to_string()).unwrap_or_default();
     if metin.len() < 20 {
         return Err((StatusCode::BAD_REQUEST, "metin cok kisa (min 20)".to_string()));
@@ -2901,7 +2939,7 @@ async fn denetim_sonuc(    State(state): State<Arc<AppState>>,
     headers: HeaderMap,
     Json(req): Json<DenetimSonuc>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let denetci = token_dogrula(&headers, &state.pool).await?;
+    let denetci = token_dogrula(&headers, &state).await?;
     let now = current_epoch();
 
     // KOR ID cozumu (Guvenlik Md.1): denetci kor ID gonderir.
@@ -3072,7 +3110,7 @@ async fn ledger(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
 ) -> Result<Json<LedgerResp>, (StatusCode, String)> {
-    let miner_id = token_dogrula(&headers, &state.pool).await?;
+    let miner_id = token_dogrula(&headers, &state).await?;
     let rows = sqlx::query_as::<_, LedgerEntry>(
         "SELECT id, miner_id, delta_mikro, neden, epoch, ts FROM ledger WHERE miner_id = ? ORDER BY id DESC LIMIT 100"
     )
@@ -3089,7 +3127,7 @@ async fn shard_ilan(
     headers: HeaderMap,
     Json(ilan): Json<ShardIlan>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let miner_id = token_dogrula(&headers, &state.pool).await?;
+    let miner_id = token_dogrula(&headers, &state).await?;
     if ilan.miner_id != miner_id {
         return Err((StatusCode::FORBIDDEN, "ilan miner_id token ile uyusmuyor".to_string()));
     }
@@ -3107,7 +3145,7 @@ async fn shard_liste(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
 ) -> Result<Json<ShardListeResp>, (StatusCode, String)> {
-    let _ = token_dogrula(&headers, &state.pool).await?;
+    let _ = token_dogrula(&headers, &state).await?;
     let rows = sqlx::query_as::<_, ShardKaydi>(
         "SELECT miner_id, corpus, baslangic, bitis, adet, kaynak, durum, ts FROM shard_ilanlari WHERE durum = 'aktif' ORDER BY ts DESC LIMIT 100"
     )
@@ -3262,7 +3300,7 @@ async fn parca_tohum(
     headers: HeaderMap,
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let miner_id = token_dogrula(&headers, &state.pool).await?;
+    let miner_id = token_dogrula(&headers, &state).await?;
     let dosya = req.get("dosya").and_then(|v| v.as_str()).ok_or((StatusCode::BAD_REQUEST, "dosya gerekli".to_string()))?;
     match tohumla(&state, dosya).await {
         Ok(parcalar) => {
@@ -3284,7 +3322,7 @@ async fn parca_indir(
     headers: HeaderMap,
     axum::extract::Path(hash): axum::extract::Path<String>,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    let _ = token_dogrula(&headers, &state.pool).await?;
+    let _ = token_dogrula(&headers, &state).await?;
     let yol = relay_yolu(&state, hash.trim()).ok_or((StatusCode::BAD_REQUEST, "gecersiz hash".to_string()))?;
     let veri = tokio::fs::read(&yol).await.map_err(|_| (StatusCode::NOT_FOUND, "parca relay'de yok".to_string()))?;
     use axum::response::Response;
@@ -3395,7 +3433,7 @@ async fn yoklama_al(
     State(state): State<Arc<AppState>>,
     headers: HeaderMap,
 ) -> Result<impl IntoResponse, (StatusCode, String)> {
-    let miner_id = token_dogrula(&headers, &state.pool).await?;
+    let miner_id = token_dogrula(&headers, &state).await?;
     let now = current_epoch();
     let row = sqlx::query(
         "SELECT id, parca_hash, offset, uzunluk FROM yoklamalar WHERE miner_id = ? AND durum = 'acik' AND ts > ? ORDER BY ts ASC LIMIT 1"
@@ -3428,7 +3466,7 @@ async fn yoklama_sonuc(
     headers: HeaderMap,
     Json(req): Json<YoklamaSonuc>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let miner_id = token_dogrula(&headers, &state.pool).await?;
+    let miner_id = token_dogrula(&headers, &state).await?;
     let row = sqlx::query(
         "SELECT parca_hash, beklenen_hash FROM yoklamalar WHERE id = ? AND miner_id = ? AND durum = 'acik'"
     )
@@ -3465,7 +3503,7 @@ async fn yoklama_uret_endpoint(
     headers: HeaderMap,
     Json(req): Json<serde_json::Value>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
-    let _ = token_dogrula(&headers, &state.pool).await?;
+    let _ = token_dogrula(&headers, &state).await?;
     // Hedefli uretim: supheli parcayi ozellikle denetle.
     if let Some(hedef_hash) = req.get("parca_hash").and_then(|v| v.as_str()) {
         let h = hedef_hash.trim();
@@ -3704,6 +3742,21 @@ async fn main() -> anyhow::Result<()> {
     let db_path = std::env::var("DB_PATH").unwrap_or_else(|_| "/tmp/komuta.db".to_string());
     let master_pubkey = std::env::var("MASTER_PUBKEY_B64")
         .unwrap_or_else(|_| "Sdc/yVS0SXAiqclXKJ0iHggjvZZMgPfGYSOlG1mqZQs=".to_string());
+    // B39 token-pepper: DB-yanindaki token-pepper dosyasi (64-hex).
+    // YOKSA ACILMAZ (fail-secure: peppersiz auth calismaz).
+    let pepper_yolu = std::env::var("TOKEN_PEPPER_PATH").unwrap_or_else(|_| {
+        std::path::PathBuf::from(&db_path)
+            .parent().map(|p| p.join("token-pepper"))
+            .unwrap_or_else(|| std::path::PathBuf::from("/tmp/token-pepper"))
+            .to_string_lossy().to_string()
+    });
+    let token_pepper: [u8; 32] = {
+        let ham = std::fs::read_to_string(&pepper_yolu).map_err(|e| {
+            anyhow::anyhow!("token-pepper acilamadi ({}): {} — olustur: python3 -c \"import secrets; open(YOL,'w').write(secrets.token_hex(32))\" + chmod 600", pepper_yolu, e)
+        })?;
+        let v = hex::decode(ham.trim()).map_err(|e| anyhow::anyhow!("token-pepper hex degil: {}", e))?;
+        v.try_into().map_err(|_| anyhow::anyhow!("token-pepper 32 bayt olmali"))?
+    };
     let corpus = std::env::var("GOREV_CORPUS").unwrap_or_else(|_| "tr".to_string());
     let port: u16 = std::env::var("PORT").unwrap_or_else(|_| "8787".to_string()).parse()?;
     let p2p_port: u16 = std::env::var("P2P_PORT").unwrap_or_else(|_| "4003".to_string()).parse()?;
@@ -3865,6 +3918,7 @@ async fn main() -> anyhow::Result<()> {
         yedek_dir: yedek_dir.clone(),
         gorev_yayin_tx: if gorev_yayin_acik { Some(gorev_yayin_tx) } else { None },
         strict_denetim,
+        token_pepper,
     });
     info!("Parca relay: {} | yedek: {}", relay_dir, yedek_dir);
 
@@ -4182,6 +4236,30 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_token_kasasi() {
+        // B39: kayit HMAC-saklar, auth HMAC-dogrular, eski-duz-metin
+        // ilk-kullanimda yukseltir. Kanarya eski-formda kalir.
+        let state = test_state().await;
+        let mut h = HeaderMap::new();
+        h.insert("authorization", "Bearer x".parse().unwrap());
+        // Eski-duz-metin satiri ekle (gecmis-donem simulasyonu).
+        sqlx::query("INSERT INTO miners (miner_id, token, cuzdan, makine_id, created_at, coin_mikro) VALUES ('m-legacy', 'duz-token-123', 'c', 'k', 1, 0)")
+            .execute(&state.pool).await.unwrap();
+        let mut hl = HeaderMap::new();
+        hl.insert("authorization", "Bearer duz-token-123".parse().unwrap());
+        let mid = token_dogrula(&hl, &state).await.unwrap();
+        assert_eq!(mid, "m-legacy");
+        let sakli: String = sqlx::query_scalar("SELECT token FROM miners WHERE miner_id = 'm-legacy'")
+            .fetch_one(&state.pool).await.unwrap();
+        assert!(sakli.starts_with("v1:"), "yukseltme olmadi: {}", &sakli[..8]);
+        assert!(!sakli.contains("duz-token"), "duz-metin duruyor!");
+        // Yanlis token red.
+        let red = token_dogrula(&h, &state).await;
+        assert!(red.is_err());
+        let _ = h;
+    }
+
+    #[tokio::test]
     async fn test_toplu_once_auth() {
         // B2: auth'suz toplu-kanit tekil yolla ayni kodu doner (401), 200-icinde-hata degil.
         let state = test_state().await;
@@ -4313,6 +4391,7 @@ mod tests {
             yedek_dir: "/tmp".to_string(),
             gorev_yayin_tx: None,
             strict_denetim: false,
+            token_pepper: [7u8; 32],
             havuz_tavan: 0,
         })
     }
