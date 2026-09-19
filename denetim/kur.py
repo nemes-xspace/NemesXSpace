@@ -97,6 +97,8 @@ HAM = [
  ('RR', 'RR-2026-007', '2026-09-19T22:30:00Z', 'Derin-tarama duzeltmesi-2: REPLIKA_HEDEF gercek', 'Sabit komuta-rs:67de + onarim-dongusu calisiyor (60 tamam); onceki yok-hukmu YANLIS (p2pde aranmis); REPLIKASYON.md yazildi', 'kod-satiri+DB-olcum', 'kapandi-duzeltmeli', 'denetci'),
  ('IR', 'IR-2026-008', '2026-09-19T23:00:00Z', 'Kutu-supurme: 4-ajan + HF-token-canli + backlog-75sa', 'HF-token dosyasi 700e cekildi (rotasyon sahipte); backlog alarm calisiyor (4.9x inflow); 350MB+ /tmp temizlendi; Tauri/K1-B8/kasa-log kayda gecti', 'supurme-raporlari', 'kismen (alarm+secim-sahipte)', 'denetci'),
  ('CR', 'CR-2026-029', '2026-09-19T23:30:00Z', 'Zehir-deneyi: gecit-yonu-dogru ama YETERSIZ', 'A2.36/B2.40/ort2.53/zehir2.83; fark +0.295 < esik +0.300 (ISSKAL); saf-ortalama ebeveynden kotu; trimmed-mean + tolerans-kalibrasyonu sirada', 'zehir-sonuc.log', 'deney-kapandi, tasarim-revize', 'denetci'),
+ ('CR', 'CR-2026-030', '2026-09-20T00:00:00Z', 'Gomme-sunucu yenileme: uretim 20x', '1241/1242/1247 taze (2.4-gunluk eskimi); gecikme 20sn->0.3sn; ~9/sn->~177/sn; bekci-uyku-koku (R-30)', 'latency+DB+nvidia', 'CANLI', 'denetci'),
+ ('FR', 'FR-2026-017', '2026-09-20T00:00:00Z', 'Bekci rolling-restart pipeline-bagimli (uyur)', 'wiki_embed_par yoksa restart yok; 2.4-gunluk sunucu 20-60x yavasladi; duzeltme-spec: hat-14 gate-kaldirma', 'embed_bekci.sh:11-14', 'acik (R-30)', 'denetci'),
 ]
 
 with open(CIKTI, 'w', encoding='utf-8') as f:
