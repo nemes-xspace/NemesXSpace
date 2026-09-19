@@ -86,6 +86,7 @@ HAM = [
  ('CR', 'CR-2026-022', '2026-09-19T18:00:00Z', 'Prompt15-revize: AI-sinir politikasi + uyum-olcumu', '7 yasak olculdu (hepsi uyumlu); nabiz-dokunulmazlik kurali; otomatik-kilit N/A-gerekceli', 'remote/push-akisi + oturum-gecmisi', 'yururlukte', 'denetci'),
  ('CR', 'CR-2026-023', '2026-09-19T18:30:00Z', 'Prompt16-revize: switch-ENV + git-ifsasi-kabulu', 'Esik koddan cikti; commit-ritmi ifsasi yazili-kabul (6-ay gozden-gecirme)', 'izleme-ciktisi+git-log', 'yururlukte', 'denetci'),
  ('CR', 'CR-2026-024', '2026-09-19T19:00:00Z', 'Prompt17: regresyon-batarya + R-REG-01 + R-08-etkinlik', '27x6, audit, CI, SHA, zincir, canli-prob; README-hash regresyonu yakalandi-duzeltildi; 409 %12.8->%0; bagimsizlik-yapisal-eksik (sahip-gozu bekler)', 'test-ciktilari+olcumler', 'dogrulandi-kismen', 'denetci'),
+ ('CR', 'CR-2026-025', '2026-09-19T19:30:00Z', 'Prompt18: dongu otomasyonu (Tur-1)', 'dongu-gunluk.py + timer (gunluk); Tur-1: 0 bulgu; .venv-denetim kalici', 'betik-ciktisi+timer-listesi', 'CANLI', 'denetci'),
 ]
 
 with open(CIKTI, 'w', encoding='utf-8') as f:

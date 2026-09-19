@@ -1,0 +1,10 @@
+[Unit]
+Description=NEMES gunluk dongu zamanlayici
+
+[Timer]
+OnCalendar=daily
+Persistent=true
+RandomizedDelaySec=30min
+
+[Install]
+WantedBy=timers.target

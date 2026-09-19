@@ -1,0 +1,9 @@
+[Unit]
+Description=NEMES gunluk surekli-iyilestirme dongusu (Tur)
+After=network.target nemes-komuta.service
+
+[Service]
+Type=oneshot
+User=d3str0y1ng
+WorkingDirectory=/home/d3str0y1ng/nemes-testnet
+ExecStart=/usr/bin/python3 /home/d3str0y1ng/nemes-testnet/scripts/dongu-gunluk.py
