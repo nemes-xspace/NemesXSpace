@@ -95,6 +95,7 @@ HAM = [
  ('CR', 'CR-2026-028', '2026-09-19T22:30:00Z', 'Dalga-tamamlama: B35/B36/B39/R-08/R-25/vendor/rehber + master-Rev2', 'libp2p-0.57, sqlx-0.8.6, HMAC-pepper+test, atomik-claim, PQ64-negatif, 884M-vendor, cüzdan-rehberi; hepsi test-yesil', 'test/audit/olcum', 'kod-hazir (deploy bekler)', 'denetci'),
  ('IR', 'IR-2026-007', '2026-09-19T21:45:00Z', 'Restore-yakin-kacirma: D-Bus-takim + `;` zinciri', 'Servisler durmadi, dosya tasindi; ayni-inode sayesinde sifir-kayip (5.29M dogrulandi). Kural: yikici-islemde `&&` + durum-kontrolu; tam-yol-restore D-Bus-istikrarsizken YASAK', 'journal+DB-sayimi', 'kapandi-dersli', 'denetci'),
  ('RR', 'RR-2026-007', '2026-09-19T22:30:00Z', 'Derin-tarama duzeltmesi-2: REPLIKA_HEDEF gercek', 'Sabit komuta-rs:67de + onarim-dongusu calisiyor (60 tamam); onceki yok-hukmu YANLIS (p2pde aranmis); REPLIKASYON.md yazildi', 'kod-satiri+DB-olcum', 'kapandi-duzeltmeli', 'denetci'),
+ ('IR', 'IR-2026-008', '2026-09-19T23:00:00Z', 'Kutu-supurme: 4-ajan + HF-token-canli + backlog-75sa', 'HF-token dosyasi 700e cekildi (rotasyon sahipte); backlog alarm calisiyor (4.9x inflow); 350MB+ /tmp temizlendi; Tauri/K1-B8/kasa-log kayda gecti', 'supurme-raporlari', 'kismen (alarm+secim-sahipte)', 'denetci'),
 ]
 
 with open(CIKTI, 'w', encoding='utf-8') as f:

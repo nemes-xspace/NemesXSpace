@@ -10,9 +10,10 @@
 
 ## 1. Kurulum (5 komut)
 ```bash
-# 1) Paketi indir + doğrula
+# 1) Paketi indir + doğrula (iki-katman: hash + imza; TOFU-değil)
 curl -O https://nemes-x.space/miner/nemes-miner-v0.2.0-linux.zip
 sha256sum -c SHA256SUMS
+# + SHA256SUMS.sig dogrulamasi (README.txt'deki anahtar+komutla)
 # 2) Komuta binary'si (DUYURUDAKİ sürüm ve hash ile)
 # 3) Dizin + servis dosyaları kopyala (paketteki systemd/ klasörü)
 sudo cp systemd/* /etc/systemd/system/ && sudo systemctl daemon-reload
