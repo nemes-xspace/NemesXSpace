@@ -94,6 +94,7 @@ HAM = [
  ('DR', 'DR-2026-007', '2026-09-19T22:00:00Z', 'Vasiyet-mektubu REDDI + dagitik-300 varsayimi', 'Mektup yazilmayacak (sahip); kalici-yokluk prosedursuz, risk tasinir, 6-ay-gozden-gecirme. 300 GPU dagitik: senkron/boru-hatti OLU, asenkron-FedAvg/DiLoCo yasar', 'sahip-beyani (bu oturum)', 'yururlukte', 'hak-sahibi'),
  ('CR', 'CR-2026-028', '2026-09-19T22:30:00Z', 'Dalga-tamamlama: B35/B36/B39/R-08/R-25/vendor/rehber + master-Rev2', 'libp2p-0.57, sqlx-0.8.6, HMAC-pepper+test, atomik-claim, PQ64-negatif, 884M-vendor, cüzdan-rehberi; hepsi test-yesil', 'test/audit/olcum', 'kod-hazir (deploy bekler)', 'denetci'),
  ('IR', 'IR-2026-007', '2026-09-19T21:45:00Z', 'Restore-yakin-kacirma: D-Bus-takim + `;` zinciri', 'Servisler durmadi, dosya tasindi; ayni-inode sayesinde sifir-kayip (5.29M dogrulandi). Kural: yikici-islemde `&&` + durum-kontrolu; tam-yol-restore D-Bus-istikrarsizken YASAK', 'journal+DB-sayimi', 'kapandi-dersli', 'denetci'),
+ ('RR', 'RR-2026-007', '2026-09-19T22:30:00Z', 'Derin-tarama duzeltmesi-2: REPLIKA_HEDEF gercek', 'Sabit komuta-rs:67de + onarim-dongusu calisiyor (60 tamam); onceki yok-hukmu YANLIS (p2pde aranmis); REPLIKASYON.md yazildi', 'kod-satiri+DB-olcum', 'kapandi-duzeltmeli', 'denetci'),
 ]
 
 with open(CIKTI, 'w', encoding='utf-8') as f:
