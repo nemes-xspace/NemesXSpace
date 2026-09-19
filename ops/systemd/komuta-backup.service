@@ -1,0 +1,9 @@
+[Unit]
+Description=Komuta DB günlük yedek
+After=network.target
+
+[Service]
+Type=oneshot
+User=d3str0y1ng
+WorkingDirectory=/home/d3str0y1ng/nemes-testnet
+ExecStart=/home/d3str0y1ng/nemes-testnet/scripts/backup-db.py

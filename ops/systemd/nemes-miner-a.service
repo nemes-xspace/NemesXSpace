@@ -1,0 +1,14 @@
+[Unit]
+Description=NEMES Miner A (testnet)
+After=network.target nemes-komuta.service beyin_bekci.service
+Wants=nemes-komuta.service beyin_bekci.service
+
+[Service]
+User=d3str0y1ng
+WorkingDirectory=/home/d3str0y1ng/nemes-testnet
+ExecStart=/usr/bin/bash -c 'exec /home/d3str0y1ng/nemes-testnet/bin/nemes-miner mine --simple --komuta http://127.0.0.1:8787 --token $(cat /home/d3str0y1ng/nemes-testnet/miner-a.token) --embed-api http://127.0.0.1:1241 --anahtar /home/d3str0y1ng/nemes-testnet/miner-a.key --corpus tr --shard-adet 2000 --p2p-port 0 --depolama /home/d3str0y1ng/nemes-testnet/depolama-a'
+Restart=always
+RestartSec=15
+
+[Install]
+WantedBy=multi-user.target

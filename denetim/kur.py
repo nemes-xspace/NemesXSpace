@@ -80,6 +80,7 @@ HAM = [
  ('CR', 'CR-2026-016', '2026-09-19T10:30:00Z', 'Prompt9: imza+kanarya+sandbox+SBOM+LICENSE+IR', 'SHA256SUMS.sig (Good signature); kanarya-credential (uyuyor); 3 sandbox drop-in (canli, hatasiz); SBOM 395+300; LICENSE 2 repoya; IR-PLAN', 'journal+sig-dogrulama+test', 'CANLI', 'denetci'),
  ('CR', 'CR-2026-017', '2026-09-19T11:00:00Z', 'Prompt10: derin-saglik+kaos-olcum+ADR-004', 'db_ms/havuz_boyut canli (0); restart-uretim 26sn/2dk; graceful-degradation kanitli; yapilmadilari gerekceli', 'curl+journal+27/27', 'CANLI', 'denetci'),
  ('CR', 'CR-2026-018', '2026-09-19T12:00:00Z', 'Prompt11: odeme_yaz atomik (8 cift) + VERI-ENVANTERI', '395-mikro tarihsel kayma arastirildi (dokunulmadi); 27/27; LUKS-suzluk olculdu (acik)', 'test+sql-olcum+lsblk', 'kod-hazir (deploy bekler)', 'denetci'),
+ ('CR', 'CR-2026-019', '2026-09-19T13:30:00Z', 'Prompt12: limit+sandbox-canli+journal-cap+ops-surum+deploy-proseduru+disk-yuzde', 'MemoryMax 20G/2G, sandbox 3 serviste hatasiz, journald 2G, birimler gitte, erken-uyari %90', 'systemd-verify+journal+izleme', 'CANLI-kismen (limitler restartta)', 'denetci'),
 ]
 
 with open(CIKTI, 'w', encoding='utf-8') as f:

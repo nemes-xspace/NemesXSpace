@@ -1,0 +1,15 @@
+# NEMES veri-maliki istisnalari (19 Eyl 2026, R-11).
+# Gerekce: AIDE gunluk taramasi 22sa+ suruyor (773G /srv/beyin + 8G DB +
+# derleme dizinleri); PID1/D-Bus boguluyor, deploy kilitleniyor.
+# Butunluk bu alanlarda uygulama-seviyesinde korunur (integrity_check,
+# SHA256SUMS, git). Degisiklik izleme sistem dizinlerinde devam eder.
+# (.faiss/.db-wal/.db-shm hepsi /srv/beyin altinda - ayri kural gerekmez.)
+!/srv/beyin
+!/home/d3str0y1ng/nemes-testnet/yedek
+!/home/d3str0y1ng/nemes-bundle
+!/home/d3str0y1ng/nemes-bundle-v0.2.0-linux.tar.gz
+!/home/d3str0y1ng/[^/]*/target
+!/home/d3str0y1ng/[^/]*/node_modules
+!/home/d3str0y1ng/[^/]*/.git
+!/home/d3str0y1ng/nemes-p2p/target
+!/var/lib/libvirt/images
