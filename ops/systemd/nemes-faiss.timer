@@ -1,0 +1,10 @@
+[Unit]
+Description=NEMES uretim-FAISS haftalik birlestirme
+
+[Timer]
+OnCalendar=Sun *-*-* 03:00:00
+Persistent=true
+RandomizedDelaySec=30min
+
+[Install]
+WantedBy=timers.target

@@ -34,13 +34,16 @@
 - Dağılım: 1.34 + 0.84 + 0.17 NEMES (üretim-orantılı).
 - Kanıt-satırı ödülü: 0 (muhasebe batch'te; toz birikir).
 
-## 5. Vektörler nereye gidiyor (kritik bulgu)
+## 5. Vektörler nereye gidiyor (19 Eyl KAPANDI ✅ + sadakat-notu)
 
 - **DB'de birikir** (4.3M satır, 9.2G): dayanıklı, sorgulanabilir, denetlenebilir.
-- **FAISS'e AKMAZ**: `wiki_newscrawl_tr.faiss` 8 Eyl'de donmuş (38.9M id);
-  canlı-üretim index'e girmiyor. Birleşme çevrimdışı-el-işi (henüz koşmadı).
-- Sonuç: ağın bugünkü çıktısı = DB-satırı; aranabilir-index büyümesi DURUK.
-  FAISS-birleştirme görevi AÇIK (sahipte).
+- **FAISS'e AKIYOR** (19 Eyl 18:36): `wiki_maden_tr.faiss` kuruldu —
+  382.687 madenci-vektörü, 18MB, nlist-512/PQ32, ntotal-doğrulamalı.
+  Haftalık otomasyon devrede (`nemes-faiss.timer`, Pazar 03:00).
+- **Sadakat-notu (ölçülü):** kaba-kuvvet self-rank=1 (veri mükemmel),
+  index recall@10 = 2-3/10 (PQ32 + sıkışık-haber-korpusu; semantik-arama
+  için yeterli, hassas-eşleşme için zayıf). İyileştirme yolu: PQ64/OPQ/
+  nprobe-yükseltme (görev, acil-değil).
 
 ## 6. Madenci profilleri (son 1 saat)
 
