@@ -1,6 +1,6 @@
 // Copyright 2026 NEMES-X. SPDX-License-Identifier: Apache-2.0.
 use axum::{
-    extract::{Path, Query, State},
+    extract::{Path, Query, State, ConnectInfo},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Json},
     routing::{get, post},
@@ -17,8 +17,8 @@ use nemes_core::mesh_audit::{DENETIM_TOPIC, DENETIM_SAYISI, DenetimDuyuru, Kanit
 use rand::Rng;
 use std::{collections::HashMap, net::SocketAddr, sync::Arc, time::Duration};
 use tokio::signal;
-use tower_http::{cors::CorsLayer, trace::TraceLayer};
-use tracing::{info, warn};
+use tower_http::trace::TraceLayer;
+use tracing::{error, info, warn};
 use uuid::Uuid;
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 
@@ -113,6 +113,9 @@ struct AppState {
     /// Dagitim kritik bolumu kilidi: cursor + supurme + claim sabitleme
     /// ayni anda tek gorevde (cift dagitim yarisini bitirir).
     dagitim_kilidi: tokio::sync::Mutex<()>,
+    /// Surum kilidi: acik kayit uclari icin IP-bazli kova (Sybil/DB-sisme
+    /// freni; saatte 10 cagri/IP). Dagitik degil (tek-komuta testnet).
+    kayit_kova: std::sync::Mutex<HashMap<String, Vec<i64>>>,
     master_pubkey_b64: String,
     corpus: String,
     embed_api: String,
@@ -313,6 +316,42 @@ async fn token_dogrula(headers: &HeaderMap, pool: &SqlitePool) -> Result<String,
         .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
     row.map(|r| r.get("miner_id"))
         .ok_or((StatusCode::UNAUTHORIZED, "Invalid token".to_string()))
+}
+
+/// Surum kilidi: acik uclar icin IP-bazli kova (Sybil/DB-sisme freni).
+/// CF arkasinda gercek IP: CF-Connecting-IP > X-Forwarded-For(ilk) > TCP peer.
+fn istemci_ip(headers: &HeaderMap, peer: Option<std::net::SocketAddr>) -> String {
+    if let Some(v) = headers.get("cf-connecting-ip").and_then(|v| v.to_str().ok()) {
+        let t = v.trim();
+        if !t.is_empty() {
+            return t.to_string();
+        }
+    }
+    if let Some(v) = headers.get("x-forwarded-for").and_then(|v| v.to_str().ok()) {
+        let ilk = v.split(',').next().unwrap_or("").trim();
+        if !ilk.is_empty() {
+            return ilk.to_string();
+        }
+    }
+    peer.map(|p| p.ip().to_string()).unwrap_or_else(|| "bilinmiyor".to_string())
+}
+
+const KAYIT_KOVA_ADET: usize = 10; // saatte IP basina en fazla kayit cagrisi
+const KAYIT_KOVA_SN: i64 = 3600;
+
+fn kayit_kova_kontrol(state: &Arc<AppState>, ip: &str) -> Result<(), (StatusCode, String)> {
+    let simdi = current_epoch();
+    let mut kova = state.kayit_kova.lock().map_err(|_| (StatusCode::INTERNAL_SERVER_ERROR, "kilit".to_string()))?;
+    let giris = kova.entry(ip.to_string()).or_default();
+    giris.retain(|t| simdi - *t < KAYIT_KOVA_SN);
+    if giris.len() >= KAYIT_KOVA_ADET {
+        return Err((StatusCode::TOO_MANY_REQUESTS, "kayit kotasi doldu (saatte 10/IP)".to_string()));
+    }
+    giris.push(simdi);
+    if kova.len() > 10000 {
+        kova.clear(); // Kova budama (sinirsiz buyumeyi keser).
+    }
+    Ok(())
 }
 
 /// Kanonik imza formati (nemes-core protocol.rs + `imzala` ile birebir):
@@ -612,19 +651,25 @@ async fn ara_calistir(
     })
 }
 
-/// POST /api/ara {"sorgu": "...", "k": 5} — herkese acik demo.
+/// POST /api/ara {"sorgu": "...", "k": 5} — kayitli madenciye acik demo.
+/// Surum kilidi: anonim pahali tarama kapali (DoS/amplifikasyon); kayit
+/// ucretsiz ve acik oldugu icin demo erisilebilir kalir, izlenebilir olur.
 async fn ara(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Json(req): Json<AraReq>,
 ) -> Result<Json<AraResp>, (StatusCode, String)> {
+    token_dogrula(&headers, &state.pool).await?;
     Ok(Json(ara_calistir(&state, &req.sorgu, req.k).await?))
 }
 
-/// GET /api/ara?q=...&k=5 — tarayici kolayligi.
+/// GET /api/ara?q=...&k=5 — tarayici kolayligi (ayni kapi).
 async fn ara_get(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
     Query(q): Query<HashMap<String, String>>,
 ) -> Result<Json<AraResp>, (StatusCode, String)> {
+    token_dogrula(&headers, &state.pool).await?;
     let sorgu = q.get("q").cloned().unwrap_or_default();
     let k = q.get("k").and_then(|s| s.parse::<usize>().ok());
     Ok(Json(ara_calistir(&state, &sorgu, k).await?))
@@ -866,8 +911,20 @@ async fn health() -> Json<HealthResp> {
 
 async fn register(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    peer: Option<ConnectInfo<std::net::SocketAddr>>,
     Json(req): Json<RegisterReq>,
 ) -> Result<Json<RegisterResp>, (StatusCode, String)> {
+    let ip = istemci_ip(&headers, peer.map(|c| c.0));
+    kayit_kova_kontrol(&state, &ip)?;
+    let cuzdan = req.cuzdan.trim().to_string();
+    if cuzdan.is_empty() || cuzdan.len() > 128 {
+        return Err((StatusCode::BAD_REQUEST, "gecersiz cuzdan".to_string()));
+    }
+    let makine = req.makine_id.chars().take(64).collect::<String>();
+    if makine.trim().is_empty() {
+        return Err((StatusCode::BAD_REQUEST, "gecersiz makine_id".to_string()));
+    }
     let token = Uuid::new_v4().to_string().replace("-", "");
     let miner_id = format!("miner-{}", &token[..8]);
     let now = current_epoch();
@@ -877,12 +934,15 @@ async fn register(
     )
     .bind(&miner_id)
     .bind(&token)
-    .bind(&req.cuzdan)
-    .bind(&req.makine_id)
+    .bind(&cuzdan)
+    .bind(&makine)
     .bind(now)
     .execute(&state.pool)
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .map_err(|e| {
+        error!("kayit DB-hata ip={}: {}", ip, e);
+        (StatusCode::INTERNAL_SERVER_ERROR, "kayit yazilamadi".to_string())
+    })?;
 
     sqlx::query(
         "INSERT INTO ledger (miner_id, delta_mikro, neden, epoch, ts) VALUES (?, 0, 'init', ?, ?)"
@@ -892,9 +952,12 @@ async fn register(
     .bind(now)
     .execute(&state.pool)
     .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    .map_err(|e| {
+        error!("kayit ledger-hata ip={}: {}", ip, e);
+        (StatusCode::INTERNAL_SERVER_ERROR, "kayit yazilamadi".to_string())
+    })?;
 
-    info!("Yeni madenci kaydedildi: {} ({})", miner_id, req.cuzdan);
+    info!("Yeni madenci kaydedildi: {} ({})", miner_id, cuzdan);
     Ok(Json(RegisterResp { token, miner_id }))
 }
 
@@ -936,8 +999,12 @@ struct TopluKayitIstek {
 
 async fn register_toplu(
     State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    peer: Option<ConnectInfo<std::net::SocketAddr>>,
     Json(req): Json<TopluKayitIstek>,
 ) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let ip = istemci_ip(&headers, peer.map(|c| c.0));
+    kayit_kova_kontrol(&state, &ip)?;
     let cuzdan = req.cuzdan.trim().to_string();
     if cuzdan.is_empty() || cuzdan.len() > 128 {
         return Err((StatusCode::BAD_REQUEST, "gecersiz cuzdan".to_string()));
@@ -2174,6 +2241,8 @@ async fn kanit_toplu(
             format!("toplu kanit cok buyuk ({} > {})", istekler.len(), TOPLU_EN_FAZLA),
         ));
     }
+    // Tekil yolla ayni kapı: once auth, sonra is. (200-icinde-401 deseni B2.)
+    token_dogrula(&headers, &state.pool).await?;
     let mut sonuclar = Vec::with_capacity(istekler.len());
     for req in &istekler {
         let mid = req.madde_id;
@@ -3610,7 +3679,29 @@ fn app_router(state: Arc<AppState>) -> Router {
         .route("/api/depolama/yoklama", get(yoklama_al))
         .route("/api/depolama/yoklama/sonuc", post(yoklama_sonuc))
         .route("/api/depolama/yoklama/uret", post(yoklama_uret_endpoint))
-        .layer(CorsLayer::permissive())
+        .layer(
+            // Surum kilidi: permissive() kapatildi. Izin: site + Tauri +
+            // yerel-gelistirme. Tarayici-disi istemciler (CLI) CORS'tan etkilenmez.
+            tower_http::cors::CorsLayer::new()
+                .allow_origin(tower_http::cors::AllowOrigin::predicate(
+                    |origin: &axum::http::HeaderValue, _| {
+                        origin.as_bytes() == b"https://nemes-x.space"
+                            || origin.as_bytes() == b"tauri://localhost"
+                            || origin.as_bytes().starts_with(b"http://localhost")
+                            || origin.as_bytes().starts_with(b"http://127.0.0.1")
+                    },
+                ))
+                .allow_methods([
+                    axum::http::Method::GET,
+                    axum::http::Method::POST,
+                    axum::http::Method::OPTIONS,
+                ])
+                .allow_headers([
+                    axum::http::header::CONTENT_TYPE,
+                    axum::http::header::AUTHORIZATION,
+                ]),
+        )
+        .layer(tower_http::limit::RequestBodyLimitLayer::new(512 * 1024))
         .layer(TraceLayer::new_for_http())
         .with_state(state)
 }
@@ -3776,6 +3867,7 @@ async fn main() -> anyhow::Result<()> {
         matris,
         havuz_tavan,
         dagitim_kilidi: tokio::sync::Mutex::new(()),
+        kayit_kova: std::sync::Mutex::new(HashMap::new()),
         master_pubkey_b64: master_pubkey,
         corpus,
         embed_api,
@@ -4087,6 +4179,33 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_kayit_kovasi() {
+        // Surum kilidi: IP basina saatte 10 kayit cagrisi, 11. red (429).
+        let state = test_state().await;
+        for _ in 0..10 {
+            assert!(kayit_kova_kontrol(&state, "9.9.9.9").is_ok());
+        }
+        let red = kayit_kova_kontrol(&state, "9.9.9.9");
+        assert!(red.is_err());
+        assert_eq!(red.unwrap_err().0, StatusCode::TOO_MANY_REQUESTS);
+        // Baska IP etkilenmez.
+        assert!(kayit_kova_kontrol(&state, "8.8.8.8").is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_toplu_once_auth() {
+        // B2: auth'suz toplu-kanit tekil yolla ayni kodu doner (401), 200-icinde-hata degil.
+        let state = test_state().await;
+        let r = kanit_toplu(
+            State(state),
+            HeaderMap::new(),
+            Json(vec![KanitReq { gorev_id: "x".to_string(), madde_id: 1, v_int8_b64: "eA==".to_string(), v_min: 0.0, v_max: 1.0, imza: None }]),
+        ).await;
+        assert!(r.is_err());
+        assert_eq!(r.unwrap_err().0, StatusCode::UNAUTHORIZED);
+    }
+
+    #[tokio::test]
     async fn test_komut_uygula_gossip() {
         // B33: HTTP+gossip ortak uygulayici; bilinmeyen tip Ok, affet/imha
         // idempotent (tekrar-yayin guvenli).
@@ -4196,6 +4315,7 @@ mod tests {
             http: reqwest::Client::new(),
             matris: std::sync::Arc::new(tokio::sync::RwLock::new(VektorHavuzu::default())),
             dagitim_kilidi: tokio::sync::Mutex::new(()),
+        kayit_kova: std::sync::Mutex::new(HashMap::new()),
             master_pubkey_b64: String::new(),
             corpus: "test".to_string(),
             embed_api: String::new(),
@@ -4574,7 +4694,7 @@ mod tests {
         let dinleyici = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let adres = dinleyici.local_addr().unwrap();
         tokio::spawn(async move {
-            axum::serve(dinleyici, app).await.unwrap();
+            axum::serve(dinleyici, app.into_make_service_with_connect_info::<std::net::SocketAddr>()).await.unwrap();
         });
         (format!("http://{}", adres), state)
     }
@@ -4915,9 +5035,13 @@ mod tests {
     #[tokio::test]
     async fn test_toplu_kayit_ve_filo() {
         // B25: toplu kayit (cap dahil) + cuzdan filtreli filo.
+        // Surum kilidi sonrasi: handler'lar HeaderMap + ConnectInfo ister.
         let state = test_state().await;
+        let test_peer = ConnectInfo("127.0.0.1:1".parse::<std::net::SocketAddr>().unwrap());
         let r = register_toplu(
             State(state.clone()),
+            HeaderMap::new(),
+            Some(test_peer.clone()),
             Json(TopluKayitIstek { cuzdan: "ciftlik-c".to_string(), adet: Some(5), makine_onek: Some("raf".to_string()) }),
         ).await.unwrap().0;
         assert_eq!(r.get("adet").and_then(|v| v.as_i64()), Some(5));
@@ -4927,6 +5051,8 @@ mod tests {
         // Cap: 500 istense 200 doner.
         let r = register_toplu(
             State(state.clone()),
+            HeaderMap::new(),
+            Some(test_peer.clone()),
             Json(TopluKayitIstek { cuzdan: "ciftlik-c".to_string(), adet: Some(500), makine_onek: None }),
         ).await.unwrap().0;
         assert_eq!(r.get("adet").and_then(|v| v.as_i64()), Some(200));
@@ -4943,6 +5069,8 @@ mod tests {
         // Bos cuzdan red.
         let red = register_toplu(
             State(state.clone()),
+            HeaderMap::new(),
+            Some(test_peer),
             Json(TopluKayitIstek { cuzdan: "  ".to_string(), adet: Some(2), makine_onek: None }),
         ).await;
         assert!(red.is_err());

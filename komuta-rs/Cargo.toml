@@ -8,7 +8,7 @@ description = "NEMES Komuta API - Rust port (Axum + sqlx)"
 [dependencies]
 axum = { version = "0.7", features = ["macros", "json", "multipart", "ws"] }
 tokio = { version = "1.38", features = ["full", "rt-multi-thread"] }
-tower-http = { version = "0.5", features = ["cors", "trace", "normalize-path"] }
+tower-http = { version = "0.5", features = ["cors", "trace", "normalize-path", "limit"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 serde = { version = "1.0", features = ["derive"] }

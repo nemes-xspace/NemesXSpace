@@ -127,6 +127,7 @@ b1b3770 GPU geri | 26def41 GPU 300W
 - B35. AÇIK (18 Eyl): libp2p 0.53→güncel yükseltme (h2/hickory/ring-0.16/webpki-0.101 advisories bu zincirde; audit.toml gerekçeli-istisna ile yeşil, kaldirma bu göreve bağlı).
 - B36. AÇIK (18 Eyl): sqlx 0.7→0.8 yükseltme (RUSTSEC-2024-0363 + rsa-Marvin bu zincirde; sqlite-only runtime'da erişilemez, istisnalı; 0.8 breaking → ayrı test döngüsü ister).
 - B37. KAPANDI ✅ (18 Eyl): reqwest 0.11→0.12 birleşti (rustls-0.23 danışmanlığı öldü); sqlx default-features=false (ölü mysql/postgres kodu derlenmiyor).
+- B38. AÇIK (18 Eyl, izlemede yakalandı): çift-denetim çakışması %12,8 (80/626, 20 dk): iki denetçi aynı kayda koşuyor, kaybeden 409 yiyor (GPU israfı, doğruluk etkilenmez). Kök: atama-anında rezervasyon yok (`son_denetci` sonuçta yazılıyor). Fix: atamada atomik claim. systemd düzelince deploy ile verilecek.
 - B11. KAPANDI ✅ (17 Eyl 21:41): gece nöbeti devrede (18 tur, kuyruk+RSS+OOM sütunlu).
 
 ### SENDEN (operatör)

@@ -508,3 +508,13 @@
   (servisler saglikli, eski binary ile uretimde). PID1'e dokunulmadi;
   systemd duzelince yeni binary (release derlendi) sirayla devreye alinacak.
   Push token bekleniyor (3 repo commitli).
+- 2026-09-19: **Surum-oncesi denetim (4 paralel ajan + operator).**
+  API kilitleri: /api/ara token-kapili, kayit kovasi (10/sa/IP) + validasyon,
+  toplu-kanit 401-once, CORS permissive->sikilastirma, govde-limiti 512KB,
+  acik-yol 500'ler jeneriklesti (3 yeni test, 27/27 yesil).
+  Yedek: timer 2.7sa takilma kokten cozuldu (pages=-1), tmp+rename+integrity+
+  rotasyon; kisitli dosya temizlendi; 8.6G dogrulamali yedek alindi.
+  Runbook komut/boyut duzeltildi. Zip tazelendi (reqwest-0.12 binary,
+  SHA 3/3). Bundle 707MB tarball hazir (dagitim operatorde).
+  Win TOKEN.txt canli-token (600, git-disi) — rotasyon VM-oturumunda.
+  B6 aklanma (16 Eyl yedegi saglam). B38 cift-denetim %12,8 izlemede.
