@@ -72,6 +72,7 @@ HAM = [
  ('IR', 'IR-2026-005', '2026-09-19T07:20:00Z', 'Felaket provasi: bozuk-kopya tespiti', 'Sifirlanmis baslik aninda yakalandi (not-a-database 26); backup-db.py integrity ayni yolu kullanir', 'tatbikat logu (bu oturum)', 'kapandi-basarili', 'denetci'),
  ('RR', 'RR-2026-002', '2026-09-19T07:30:00Z', 'Felaket provasi degerlendirmesi', 'Restore KANITLANDI (RTO~3dk, RPO~24sa); .bak duman testi OK; /tmp tmpfs dersi (8G kopya doldurur)', 'FELAKET-PROVASI.md', 'sonraki: 3 ay sonra tekrar', 'denetci'),
  ('RR', 'RR-2026-003', '2026-09-19T08:00:00Z', 'Sureklilik olcumu (bus/3-2-1/tek-kaynak)', 'bus=1, yedek 9-kopya/1-lokasyon/0-uzak, crates.io %100; fork-prova clone+fetch OK', 'SUREKLILIK.md', 'sonraki: eylemler kapaninca', 'denetci'),
+ ('RR', 'RR-2026-004', '2026-09-19T08:30:00Z', 'Karsi-istihbarat supurmesi', 'Site/zip/git sizintisiz; DNS CF-arkasi; 401-korluk (olcum yaniltici cikti); opencode.db kirpik-token (kullanilamaz, mudahale yok)', 'KARSI-ISTIHBARAT.md', 'sonraki: aylik OSINT', 'denetci'),
 ]
 
 with open(CIKTI, 'w', encoding='utf-8') as f:
