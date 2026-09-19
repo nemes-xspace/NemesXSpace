@@ -82,6 +82,7 @@ HAM = [
  ('CR', 'CR-2026-018', '2026-09-19T12:00:00Z', 'Prompt11: odeme_yaz atomik (8 cift) + VERI-ENVANTERI', '395-mikro tarihsel kayma arastirildi (dokunulmadi); 27/27; LUKS-suzluk olculdu (acik)', 'test+sql-olcum+lsblk', 'kod-hazir (deploy bekler)', 'denetci'),
  ('CR', 'CR-2026-019', '2026-09-19T13:30:00Z', 'Prompt12: limit+sandbox-canli+journal-cap+ops-surum+deploy-proseduru+disk-yuzde', 'MemoryMax 20G/2G, sandbox 3 serviste hatasiz, journald 2G, birimler gitte, erken-uyari %90', 'systemd-verify+journal+izleme', 'CANLI-kismen (limitler restartta)', 'denetci'),
  ('CR', 'CR-2026-020', '2026-09-19T16:15:00Z', 'Prompt13: nabiz+hiyerarsi+vasiyet-sablonu', 'otorite-nabiz canli (0 alarm); HSM/FIDO2/m-of-n YOK-kaydi; mektup YAZILMADI (sahipte)', 'izleme-ciktisi+grep', 'CANLI-kismen', 'denetci'),
+ ('CR', 'CR-2026-021', '2026-09-19T17:00:00Z', 'Prompt14: talep-proseduru+S7-brief (avukat-degilim notuyla)', 'Mütalaa YOK; iskelet+sorular yazildi; privacy.html madenci-kapsamli (kismi-olumlu)', 'dokuman', 'taslak (hukuk-onayi bekler)', 'denetci'),
 ]
 
 with open(CIKTI, 'w', encoding='utf-8') as f:
