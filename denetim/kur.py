@@ -96,6 +96,7 @@ HAM = [
  ('IR', 'IR-2026-007', '2026-09-19T21:45:00Z', 'Restore-yakin-kacirma: D-Bus-takim + `;` zinciri', 'Servisler durmadi, dosya tasindi; ayni-inode sayesinde sifir-kayip (5.29M dogrulandi). Kural: yikici-islemde `&&` + durum-kontrolu; tam-yol-restore D-Bus-istikrarsizken YASAK', 'journal+DB-sayimi', 'kapandi-dersli', 'denetci'),
  ('RR', 'RR-2026-007', '2026-09-19T22:30:00Z', 'Derin-tarama duzeltmesi-2: REPLIKA_HEDEF gercek', 'Sabit komuta-rs:67de + onarim-dongusu calisiyor (60 tamam); onceki yok-hukmu YANLIS (p2pde aranmis); REPLIKASYON.md yazildi', 'kod-satiri+DB-olcum', 'kapandi-duzeltmeli', 'denetci'),
  ('IR', 'IR-2026-008', '2026-09-19T23:00:00Z', 'Kutu-supurme: 4-ajan + HF-token-canli + backlog-75sa', 'HF-token dosyasi 700e cekildi (rotasyon sahipte); backlog alarm calisiyor (4.9x inflow); 350MB+ /tmp temizlendi; Tauri/K1-B8/kasa-log kayda gecti', 'supurme-raporlari', 'kismen (alarm+secim-sahipte)', 'denetci'),
+ ('CR', 'CR-2026-029', '2026-09-19T23:30:00Z', 'Zehir-deneyi: gecit-yonu-dogru ama YETERSIZ', 'A2.36/B2.40/ort2.53/zehir2.83; fark +0.295 < esik +0.300 (ISSKAL); saf-ortalama ebeveynden kotu; trimmed-mean + tolerans-kalibrasyonu sirada', 'zehir-sonuc.log', 'deney-kapandi, tasarim-revize', 'denetci'),
 ]
 
 with open(CIKTI, 'w', encoding='utf-8') as f:
