@@ -370,3 +370,4 @@ beyin.py + ingest_paket×9 | komuta_api.py.donduruldu mevcut.
 - Config değişimi: önce `cat`, sonra drop-in, sonra reload+doğrula.
 - Tatbikat: her büyük hafıza değişiminde sıfır-bağlam testi.
 - Ajan bulgusu: satıra kadar DOĞRULA (Tur-3 dersi 18 Eyl: doküman ajanı ~18 bulgunun ~7'sini uydurdu — olmayan dosya/konum/sayı; P4 ters-yönlü tehlikeliydi. Her bulgu `grep`+`sed` ile teyit edilmeden DOSYAYA DOKUNULMAZ).
+- Zincir kuralı (19 Eyl, 7-prompt kapanışı): kanıt yoksa güven yok; kayıt yoksa olay yok; tatbikat yoksa plan yok; iz kontrolü yoksa gizlilik yok; alternatif yoksa süreklilik yok.
