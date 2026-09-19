@@ -68,6 +68,9 @@ HAM = [
  ('IR', 'IR-2026-003', '2026-09-18T17:00:00Z', 'Test flake %25 (denetim turu)', 'Neden: 60-maddelik tohum tukenmesi; mudahale: 200 madde; sonuc: 15/15', 'ders: zar-kapasite eslesmesi testi', 'denetci'),
  ('AL', 'AL-2026-001', '2026-09-19T07:15:00Z', 'YOKLUK-KAYDI: erisim logu tutulmuyor', 'Kim neye eristi sorusu cevaplanamaz (auditd yok, IP log yok); zafiyet olarak isli', 'durum: acik-zafiyet', 'denetci'),
  ('RR', 'RR-2026-001', '2026-09-19T07:15:00Z', 'Defter kurulus gozden-gecirmesi', 'Kapsam: Prompt1-3 + bu oturum; katilan: denetci(otomatik)+hak-sahibi; karar: defter gecerli, imza toreni bekleniyor', 'sonraki: imza sonrasi RR-2026-002', 'denetci'),
+ ('IR', 'IR-2026-004', '2026-09-19T07:25:00Z', 'Felaket provasi: restore (kopya)', 'Kopya 12sn + integrity ok (4.76M) + DB_PATH/PORT ile canli acilis ~2dk; kopya silindi, uretim etkilenmedi', 'tatbikat logu (bu oturum)', 'kapandi-basarili', 'denetci'),
+ ('IR', 'IR-2026-005', '2026-09-19T07:20:00Z', 'Felaket provasi: bozuk-kopya tespiti', 'Sifirlanmis baslik aninda yakalandi (not-a-database 26); backup-db.py integrity ayni yolu kullanir', 'tatbikat logu (bu oturum)', 'kapandi-basarili', 'denetci'),
+ ('RR', 'RR-2026-002', '2026-09-19T07:30:00Z', 'Felaket provasi degerlendirmesi', 'Restore KANITLANDI (RTO~3dk, RPO~24sa); .bak duman testi OK; /tmp tmpfs dersi (8G kopya doldurur)', 'FELAKET-PROVASI.md', 'sonraki: 3 ay sonra tekrar', 'denetci'),
 ]
 
 with open(CIKTI, 'w', encoding='utf-8') as f:
