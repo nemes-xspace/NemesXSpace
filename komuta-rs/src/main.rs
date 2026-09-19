@@ -304,6 +304,43 @@ fn current_epoch() -> i64 {
     Utc::now().timestamp()
 }
 
+/// Atomik odeme: coin + ledger ayni transaction'da (Prompt 11, B-2.1C).
+/// Gerekce: 7 ayri yerde cift-yazim vardi; crash arasinda girerse
+/// defter/coin kayar (4 Eyl 395-mikro tarihsel kayma). Negatif delta
+/// (slash/kilit) aynen gecer; neden kolonu aynen korunur.
+async fn odeme_yaz(
+    pool: &SqlitePool,
+    miner_id: &str,
+    delta_mikro: i64,
+    neden: &str,
+    epoch: i64,
+    ts: i64,
+) -> Result<(), (StatusCode, String)> {
+    let mut tx = pool
+        .begin()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    sqlx::query("UPDATE miners SET coin_mikro = coin_mikro + ? WHERE miner_id = ?")
+        .bind(delta_mikro)
+        .bind(miner_id)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    sqlx::query("INSERT INTO ledger (miner_id, delta_mikro, neden, epoch, ts) VALUES (?, ?, ?, ?, ?)")
+        .bind(miner_id)
+        .bind(delta_mikro)
+        .bind(neden)
+        .bind(epoch)
+        .bind(ts)
+        .execute(&mut *tx)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    tx.commit()
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    Ok(())
+}
+
 async fn token_dogrula(headers: &HeaderMap, pool: &SqlitePool) -> Result<String, (StatusCode, String)> {
     let auth = headers
         .get("authorization")
@@ -1153,22 +1190,7 @@ async fn heartbeat(
                 .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?
                 .rows_affected();
                 if kapanan > 0 {
-                    sqlx::query("UPDATE miners SET coin_mikro = coin_mikro + ? WHERE miner_id = ?")
-                        .bind(ONARIM_ODUL_MIKRO * kapanan as i64)
-                        .bind(&miner_id)
-                        .execute(&state.pool)
-                        .await
-                        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-                    sqlx::query(
-                        "INSERT INTO ledger (miner_id, delta_mikro, neden, epoch, ts) VALUES (?, ?, 'onarim', ?, ?)"
-                    )
-                    .bind(&miner_id)
-                    .bind(ONARIM_ODUL_MIKRO * kapanan as i64)
-                    .bind(now)
-                    .bind(now)
-                    .execute(&state.pool)
-                    .await
-                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                    odeme_yaz(&state.pool, &miner_id, ONARIM_ODUL_MIKRO * kapanan as i64, "onarim", now, now).await?;
                     info!("onarim kapandi: {} parca -> {} (+{} mikro)", p.parca_hash.chars().take(12).collect::<String>(), miner_id, ONARIM_ODUL_MIKRO * kapanan as i64);
                 }
             }
@@ -1303,22 +1325,7 @@ async fn teklif_ver(
         return Err((StatusCode::PAYMENT_REQUIRED, "stake bakiyesi yetmez".to_string()));
     }
     let now = current_epoch();
-    sqlx::query("UPDATE miners SET coin_mikro = coin_mikro - ? WHERE miner_id = ?")
-        .bind(TEKLIF_STAKE_MIKRO)
-        .bind(&miner_id)
-        .execute(&state.pool)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    sqlx::query(
-        "INSERT INTO ledger (miner_id, delta_mikro, neden, epoch, ts) VALUES (?, ?, 'teklif-kilit', ?, ?)",
-    )
-    .bind(&miner_id)
-    .bind(-TEKLIF_STAKE_MIKRO)
-    .bind(now)
-    .bind(now)
-    .execute(&state.pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    odeme_yaz(&state.pool, &miner_id, -TEKLIF_STAKE_MIKRO, "teklif-kilit", now, now).await?;
     let r = sqlx::query(
         "INSERT INTO teklifler (miner_id, corpus, baslangic, bitis, stake_mikro, durum, ts) VALUES (?, ?, ?, ?, ?, 'acik', ?)",
     )
@@ -2560,12 +2567,7 @@ async fn kanit(
                 let tb1: i64 = trow.get("bitis");
                 let ucret = batch_odul / 100;
                 if ucret > 0 {
-                    sqlx::query("UPDATE miners SET coin_mikro = coin_mikro + ? WHERE miner_id = ?")
-                        .bind(ucret).bind(&bulucu).execute(&state.pool).await
-                        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-                    sqlx::query("INSERT INTO ledger (miner_id, delta_mikro, neden, epoch, ts) VALUES (?, ?, 'teklif-odul', ?, ?)")
-                        .bind(&bulucu).bind(ucret).bind(now).bind(now).execute(&state.pool).await
-                        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                    odeme_yaz(&state.pool, &bulucu, ucret, "teklif-odul", now, now).await?;
                     batch_odul -= ucret;
                     info!("teklif odulu: #{} <- {} mikro ({})", tid, ucret, bulucu);
                 }
@@ -2615,22 +2617,7 @@ async fn kanit(
             .await
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         } else {
-            sqlx::query("UPDATE miners SET coin_mikro = coin_mikro + ? WHERE miner_id = ?")
-                .bind(pay_i)
-                .bind(&mid)
-                .execute(&state.pool)
-                .await
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-            sqlx::query(
-                "INSERT INTO ledger (miner_id, delta_mikro, neden, epoch, ts) VALUES (?, ?, 'batch', ?, ?)"
-            )
-            .bind(&mid)
-            .bind(pay_i)
-            .bind(now)
-            .bind(now)
-            .execute(&state.pool)
-            .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            odeme_yaz(&state.pool, &mid, pay_i, "batch", now, now).await?;
         }
         dagitilan += pay_i;
         if mid == miner_id && emanet == 0 {
@@ -2645,12 +2632,7 @@ async fn kanit(
                 sqlx::query("UPDATE teklifler SET durum = 'tamam', kapanma_ts = ? WHERE id = ? AND durum = 'acik'")
                     .bind(now).bind(tid).execute(&state.pool).await
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-                sqlx::query("UPDATE miners SET coin_mikro = coin_mikro + ? WHERE miner_id = ?")
-                    .bind(TEKLIF_STAKE_MIKRO).bind(&bulucu).execute(&state.pool).await
-                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-                sqlx::query("INSERT INTO ledger (miner_id, delta_mikro, neden, epoch, ts) VALUES (?, ?, 'teklif-iade', ?, ?)")
-                    .bind(&bulucu).bind(TEKLIF_STAKE_MIKRO).bind(now).bind(now).execute(&state.pool).await
-                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                odeme_yaz(&state.pool, &bulucu, TEKLIF_STAKE_MIKRO, "teklif-iade", now, now).await?;
                 info!("teklif kapandi: #{} (iade {})", tid, bulucu);
             }
         }
@@ -2976,22 +2958,7 @@ async fn denetim_sonuc(    State(state): State<Arc<AppState>>,
     };
 
     // Denetci ucreti (is basina, gecti/kaldi fark etmez — emek odendi).
-    sqlx::query("UPDATE miners SET coin_mikro = coin_mikro + ? WHERE miner_id = ?")
-        .bind(DENETIM_ODUL_MIKRO)
-        .bind(&denetci)
-        .execute(&state.pool)
-        .await
-        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-    sqlx::query(
-        "INSERT INTO ledger (miner_id, delta_mikro, neden, epoch, ts) VALUES (?, ?, 'denetim', ?, ?)"
-    )
-    .bind(&denetci)
-    .bind(DENETIM_ODUL_MIKRO)
-    .bind(now)
-    .bind(now)
-    .execute(&state.pool)
-    .await
-    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    odeme_yaz(&state.pool, &denetci, DENETIM_ODUL_MIKRO, "denetim", now, now).await?;
 
     if gecerli {
         // Gecti: skoru kilitle. Supheden donduyse suphe giderildi.
@@ -3019,22 +2986,7 @@ async fn denetim_sonuc(    State(state): State<Arc<AppState>>,
         for erow in emanetler {
             let emid: String = erow.get("miner_id");
             let emik: i64 = erow.get("miktar_mikro");
-            sqlx::query("UPDATE miners SET coin_mikro = coin_mikro + ? WHERE miner_id = ?")
-                .bind(emik)
-                .bind(&emid)
-                .execute(&state.pool)
-                .await
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-            sqlx::query(
-                "INSERT INTO ledger (miner_id, delta_mikro, neden, epoch, ts) VALUES (?, ?, 'escrow', ?, ?)"
-            )
-            .bind(&emid)
-            .bind(emik)
-            .bind(now)
-            .bind(now)
-            .execute(&state.pool)
-            .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            odeme_yaz(&state.pool, &emid, emik, "escrow", now, now).await?;
             sqlx::query("DELETE FROM escrow WHERE gorev_id = ? AND madde_id = ?")
                 .bind(&req.gorev_id)
                 .bind(madde_gercek)
@@ -3077,22 +3029,7 @@ async fn denetim_sonuc(    State(state): State<Arc<AppState>>,
             .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
         let kesinti = SLASH_MIKRO.min(bak).max(0);
         if kesinti > 0 {
-            sqlx::query("UPDATE miners SET coin_mikro = coin_mikro - ? WHERE miner_id = ?")
-                .bind(kesinti)
-                .bind(&ureten)
-                .execute(&state.pool)
-                .await
-                .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
-            sqlx::query(
-                "INSERT INTO ledger (miner_id, delta_mikro, neden, epoch, ts) VALUES (?, ?, 'slash', ?, ?)"
-            )
-            .bind(&ureten)
-            .bind(-kesinti)
-            .bind(now)
-            .bind(now)
-            .execute(&state.pool)
-            .await
-            .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+            odeme_yaz(&state.pool, &ureten, -kesinti, "slash", now, now).await?;
         }
         sqlx::query("UPDATE miners SET strike = strike + 1, itibar = CASE WHEN itibar - ? < 0 THEN 0 ELSE itibar - ? END WHERE miner_id = ?")
             .bind(ITIBAR_CEZA)
