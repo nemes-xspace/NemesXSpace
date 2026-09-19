@@ -88,6 +88,7 @@ HAM = [
  ('CR', 'CR-2026-024', '2026-09-19T19:00:00Z', 'Prompt17: regresyon-batarya + R-REG-01 + R-08-etkinlik', '27x6, audit, CI, SHA, zincir, canli-prob; README-hash regresyonu yakalandi-duzeltildi; 409 %12.8->%0; bagimsizlik-yapisal-eksik (sahip-gozu bekler)', 'test-ciktilari+olcumler', 'dogrulandi-kismen', 'denetci'),
  ('CR', 'CR-2026-025', '2026-09-19T19:30:00Z', 'Prompt18: dongu otomasyonu (Tur-1)', 'dongu-gunluk.py + timer (gunluk); Tur-1: 0 bulgu; .venv-denetim kalici', 'betik-ciktisi+timer-listesi', 'CANLI', 'denetci'),
  ('RR', 'RR-2026-006', '2026-09-19T20:00:00Z', 'Zincir kapanis-dogrulamasi (P1-P18)', '20/20 cikti-dosyasi mevcut; eksik 0; dongu 2. tura hazir (sahip-karari bekler)', 'dosya-varlik-taramasi (bu oturum)', 'kapandi', 'denetci'),
+ ('FR', 'FR-2026-016', '2026-09-19T20:30:00Z', 'FAISS-birlesme duruk (8 Eyl), canli-uretim DBde birikiyor', 'ORTA: cikti aranamiyor; birlestirme el-isi ve kosulmadi', 'URETIM-ANATOMISI.md §5', 'acik (sahipte)', 'denetci'),
 ]
 
 with open(CIKTI, 'w', encoding='utf-8') as f:
