@@ -29,7 +29,27 @@
 - Ev-upload 10-50Mbps → tur-katılımı dakikalar-mertebesi; kademeli-turlar
   (straggler-dostu, FEDERE-EGITIM-TASARIM §topoloji ile tutarlı).
 
-## Açık sorular (uygulama-öncesi)
+## Ölçüm-sonuçları (19-20 Eyl, mikro-ölçek)
+
+| Varyant | Kayıp | Hüküm |
+|---|---|---|
+| A / B / C (tekil) | 2.36 / 2.40 / 2.48 | taban (dürüstler uzlaşır) |
+| saf-ortalama (A,B) | 2.53 | ebeveynden KÖTÜ (mikro-ölçekte FedAvg faydasız) |
+| trimmed-3 (A,B,Z) | 2.66 | YETERSİZ |
+| trimmed-4 (A,B,C,Z) | 2.70 | YETERSİZ |
+| zehir (karıştırılmış) | 2.83 | kayıp-geçidi sinyali +0.295 (yön-doğru) |
+
+## Ders (tasarım-revizyonu)
+
+1. Karıştırma-zehiri marjinal-dağılımı korur → medyan onu SEÇER (dağılım-koruyan
+   zehir, medyana-dayanıklıdır). Medyan tek-başına savunma DEĞİL.
+2. Doğru-sıra: ÖNCE kayıp-geçidi (zehiri ele), SONRA yaşayanların ortalaması.
+   Geçit-eşiği kalibre edilecek (0.300 ıskaladı, 0.250 yakalardı — veri-boyutu
+   büyüyünce yeniden ölçülecek).
+3. Mikro-ölçekte (50-adım) toplama-faydası YOK; fayda ölçekte beklenir
+   (daha-uzun-yerel-eğitim + daha-fazla-katılımcı). G2'de test edilecek.
+
+## Açık sorular (uygulama-öncesi, güncellendi)
 
 - Değerlendirme-seti boyutu/rotasyonu (sızma vs temsil).
 - Tolerans-değeri (gürültü-payında sahte-red olmamalı).

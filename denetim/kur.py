@@ -100,6 +100,7 @@ HAM = [
  ('CR', 'CR-2026-030', '2026-09-20T00:00:00Z', 'Gomme-sunucu yenileme: uretim 20x', '1241/1242/1247 taze (2.4-gunluk eskimi); gecikme 20sn->0.3sn; ~9/sn->~177/sn; bekci-uyku-koku (R-30)', 'latency+DB+nvidia', 'CANLI', 'denetci'),
  ('FR', 'FR-2026-017', '2026-09-20T00:00:00Z', 'Bekci rolling-restart pipeline-bagimli (uyur)', 'wiki_embed_par yoksa restart yok; 2.4-gunluk sunucu 20-60x yavasladi; duzeltme-spec: hat-14 gate-kaldirma', 'embed_bekci.sh:11-14', 'acik (R-30)', 'denetci'),
  ('CR', 'CR-2026-031', '2026-09-20T12:00:00Z', 'Dalga-deploy-2 + trimmed-3-olumsuz + yedek-5li', 'B35/B36/B39/R-08 canli (HMAC seffaf, 0-hata); median n=3 YETERSIZ (2.658); C-egitimi basladi; rotasyon 7->5', 'journal+DB+olcum', 'CANLI/kismi', 'denetci'),
+ ('CR', 'CR-2026-032', '2026-09-20T14:00:00Z', 'Trimmed-4 + G1-revizyonu: gecit-once-ortalama-sonra', 'C2.48; medyan-4 2.70 (dagilim-koruyan-zehir medyana-dayanikli); dogru-sira kayitli; G1-tasarim revize', 'olcum-tablosu', 'deney-kapandi', 'denetci'),
 ]
 
 with open(CIKTI, 'w', encoding='utf-8') as f:
