@@ -90,6 +90,8 @@ struct VektorHavuzu {
 
 impl VektorHavuzu {
     /// Tavani uygula: fazlalik en eskiden kirpilir (ids+duz eszamanli).
+    /// Kirpmadan sonra kapasite iade edilir (B44: drain kapasiteyi tutar,
+    /// 17G RSS sızıntısı buradan geldi).
     fn tavan_uygula(&mut self, tavan: usize) {
         if tavan == 0 || self.n <= tavan {
             return;
@@ -98,6 +100,8 @@ impl VektorHavuzu {
         self.ids.drain(..fazla);
         self.duz.drain(..fazla * ARA_BOYUT);
         self.n = self.ids.len();
+        self.ids.shrink_to_fit();
+        self.duz.shrink_to_fit();
     }
 }
 
@@ -541,6 +545,7 @@ async fn yukle_havuz(
     pool: &SqlitePool,
     corpus: &str,
     after_id: i64,
+    limit_n: usize,
 ) -> anyhow::Result<(VektorHavuzu, i64)> {
     const PARCA: i64 = 50_000;
     let onek = format!("{}:%", corpus);
@@ -548,6 +553,11 @@ async fn yukle_havuz(
     let mut duz = Vec::new();
     let mut son = after_id;
     loop {
+        // B44: tavan biliniyorsa DB'den fazlasını ÇEKME (açılışta milyonlarca
+        // satır base64 çözüp sonra kırpmak 17G RSS'e mal oluyordu).
+        if limit_n > 0 && ids.len() >= limit_n {
+            break;
+        }
         let rows = sqlx::query(
             "SELECT id, madde_id, v_int8_b64, v_min, v_max FROM kanitlar \
              WHERE gorev_id LIKE ? AND id > ? ORDER BY id LIMIT ?",
@@ -671,8 +681,10 @@ async fn ara_calistir(
 
     let q = embed_sorgu(state, s).await?;
 
-    // Skorlar: normalize oldugu icin nokta-carpim = kosinus.
-    let (ids, skorlar, n) = {
+    // PARA-SLA: tarama üretim yükünde saniyeler sürebilir (1M×768).
+    // 12sn'de bitmezse asılı bağlantı yerine 503 + tekrar-dene (dürüst SLA).
+    let (ids, skorlar, n) = tokio::time::timeout(Duration::from_secs(12), async {
+        // Skorlar: normalize oldugu icin nokta-carpim = kosinus.
         let h = state.matris.read().await;
         let n = h.n;
         if n == 0 {
@@ -687,8 +699,10 @@ async fn ara_calistir(
             }
             skorlar[i] = t;
         }
-        (h.ids.clone(), skorlar, n)
-    };
+        Ok::<_, (StatusCode, String)>((h.ids.clone(), skorlar, n))
+    })
+    .await
+    .map_err(|_| (StatusCode::SERVICE_UNAVAILABLE, "arama yoğun, 10sn sonra tekrar dene".to_string()))??;
 
     let kk = k.min(n);
     let mut sira: Vec<usize> = (0..n).collect();
@@ -4059,7 +4073,7 @@ async fn main() -> anyhow::Result<()> {
     // olmadigi icin sonuc tam yuklemeyle esdegerdir (17 Eyl OOM duzeltmesi).
     let matris = std::sync::Arc::new(tokio::sync::RwLock::new(VektorHavuzu::default()));
     let mut son_id: i64 = 0;
-    match yukle_havuz(&pool, &corpus, 0).await {
+    match yukle_havuz(&pool, &corpus, 0, havuz_tavan).await {
         Ok((mut h, son)) => {
             h.tavan_uygula(havuz_tavan);
             info!("Vektor havuzu yuklendi: {} vektor", h.n);
@@ -4077,7 +4091,7 @@ async fn main() -> anyhow::Result<()> {
             let mut son = son_id;
             loop {
                 tokio::time::sleep(Duration::from_secs(HAVUZ_YENILE_SN)).await;
-                match yukle_havuz(&pool_r, &corpus_r, son).await {
+                match yukle_havuz(&pool_r, &corpus_r, son, 0).await {
                     Ok((ek, yeni_son)) => {
                         son = yeni_son;
                         if ek.n > 0 {
