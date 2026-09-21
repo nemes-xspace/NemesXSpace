@@ -95,6 +95,22 @@ enum Commands {
         /// taahhut yoksa heartbeat parcasiz gider (compute-only).
         #[arg(long, default_value = "")]
         depolama: String,
+        /// Bosta-egitim ev-dizini (train.py + .venv icerir). Bos = kapali.
+        /// Aciksa: gorev-yok aninda DAPT turu atilir (GPU-bos-kalmasin);
+        /// adaptor FedAvg-turuna katilir.
+        #[arg(long, default_value = "")]
+        bosta_egitim: String,
+        /// Bosta-egitim modeli (or. .../modeller/Qwen3-1.7B-Base).
+        #[arg(long, default_value = "")]
+        egitim_model: String,
+        /// Bosta-egitim tur-basi adim (varsayilan 25, ~3dk).
+        #[arg(long, default_value_t = 25)]
+        egitim_adim: u32,
+        /// Otonom arastirma: embed kuyrugu bosken /api/arastirma/kuyruk'tan
+        /// URL hedef cek, kuralli_fetch ile indir, sonucu gonder.
+        /// Konu hedefler atlanir. Kapaliyken davranis aynen eski.
+        #[arg(long, default_value_t = false)]
+        arastirma: bool,
     },
     /// Durum göster
     Status {
@@ -181,10 +197,10 @@ async fn main() -> anyhow::Result<()> {
                 println!("KATMAN: storage (komuta C5 sonrasi bu taahhutu isteyecek)");
             }
         }
-        Some(Commands::Mine { gpu, simple, komuta, token, embed_api, model, corpus, anahtar, shard_adet, p2p_port, p2p_dinle, denetim_mesh, bootstrap, kira, kira_adet, isci, depolama }) => {
+        Some(Commands::Mine { gpu, simple, komuta, token, embed_api, model, corpus, anahtar, shard_adet, p2p_port, p2p_dinle, denetim_mesh, bootstrap, kira, kira_adet, isci, depolama, bosta_egitim, egitim_model, egitim_adim, arastirma }) => {
             let token = token_coz(&token)?;
             if simple {
-                simple_mine(&gpu, &komuta, &token, &embed_api, &model, &corpus, &anahtar, shard_adet, p2p_port, p2p_dinle, denetim_mesh, &bootstrap, kira, kira_adet, isci, &depolama).await?;
+                simple_mine(&gpu, &komuta, &token, &embed_api, &model, &corpus, &anahtar, shard_adet, p2p_port, p2p_dinle, denetim_mesh, &bootstrap, kira, kira_adet, isci, &depolama, &bosta_egitim, &egitim_model, egitim_adim, arastirma).await?;
             } else {
                 full_tui_mine(&gpu, &komuta).await?;
             }
@@ -298,8 +314,8 @@ async fn miner_id_ogren(komuta: &str, token: &str) -> anyhow::Result<String> {
 }
 
 // ——— Basit log (xmrig klasik) — GERCEK IS: gorev al -> embed -> kanit ---
-async fn simple_mine(_gpu: &str, komuta: &str, token: &str, embed_api: &str, model: &str, corpus: &str, anahtar: &str, shard_adet: i64, p2p_port: u16, p2p_dinle: bool, denetim_mesh: bool, bootstrap: &str, kira: bool, kira_adet: i64, isci: u32, depolama: &str) -> anyhow::Result<()> {
-    use miner_core::{mining_loop, EmbedClient, GorevAlici, KanitGonderici};
+async fn simple_mine(_gpu: &str, komuta: &str, token: &str, embed_api: &str, model: &str, corpus: &str, anahtar: &str, shard_adet: i64, p2p_port: u16, p2p_dinle: bool, denetim_mesh: bool, bootstrap: &str, kira: bool, kira_adet: i64, isci: u32, depolama: &str, bosta_egitim: &str, egitim_model: &str, egitim_adim: u32, arastirma: bool) -> anyhow::Result<()> {
+    use miner_core::{mining_loop, EmbedClient, GorevAlici, KanitGonderici, BostaEgitim};
     use miner_core::{anahtar_yolu, anahtar_yukle_veya_uret, ilan_imzala, simdi_ms, ShardRelay, SigningKey};
     use miner_core::depolama as dep;
     use indicatif::{ProgressBar, ProgressStyle};
@@ -311,8 +327,32 @@ async fn simple_mine(_gpu: &str, komuta: &str, token: &str, embed_api: &str, mod
         std::path::PathBuf::from(depolama)
     };
     let dep_taahhut = dep::taahhut_oku(&dep_yol);
+    // Bosta-egitim: ev-dizini verildiyse aktif (train.py + .venv + model sart).
+    // Tampon + cikti depolama-dizininde; adaptor FedAvg-turuna katilir.
+    let be_opt: Option<BostaEgitim> = if bosta_egitim.is_empty() {
+        None
+    } else {
+        let ev = std::path::PathBuf::from(bosta_egitim);
+        if !ev.join("train.py").exists() {
+            eprintln!("uyari: --bosta-egitim dizininde train.py yok ({}), kapali", ev.display());
+            None
+        } else {
+            println!("◈ bosta-egitim ACIK (tur-basi {} adim)", egitim_adim);
+            Some(BostaEgitim {
+                ev,
+                model: egitim_model.to_string(),
+                tampon: dep_yol.join("egitim-ham.jsonl"),
+                cikti: dep_yol.join("bosta-adapter"),
+                min_satir: 500,
+                adim: egitim_adim,
+            })
+        }
+    };
     if let Some(ref t) = dep_taahhut {
         println!("◈ depolama katmani: {} ({:.0} GB taahhut)", dep_yol.display(), dep::gb(t.kota_byte));
+    }
+    if arastirma {
+        println!("◈ otonom-arastirma ACIK (kuyruk bosken URL hedef cekilir)");
     }
     let mut dep_son_nabiz = std::time::Instant::now();
 
@@ -522,6 +562,8 @@ async fn simple_mine(_gpu: &str, komuta: &str, token: &str, embed_api: &str, mod
             durdur_rx.clone(),
             dep_dir.clone(),
             uyan_rx.clone(),
+            be_opt.clone(),
+            arastirma,
         ));
     }
     let mut toplam: u64 = 0;

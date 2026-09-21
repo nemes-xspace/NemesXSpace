@@ -726,6 +726,23 @@ async fn ara_calistir(
     })
 }
 
+/// PARA-1: kullanım ölçümü (faturalandırma temeli). Asla isteği devirmez.
+async fn kullanim_yaz(state: &Arc<AppState>, miner_id: &str, uc: &str, adet: i64) {
+    if let Err(e) = sqlx::query(
+        "INSERT INTO api_kullanim (anahtar, miner_id, uc, adet, ts) VALUES (?, ?, ?, ?, ?)",
+    )
+    .bind(miner_id)
+    .bind(miner_id)
+    .bind(uc)
+    .bind(adet)
+    .bind(current_epoch())
+    .execute(&state.pool)
+    .await
+    {
+        warn!("kullanim yazılamadı ({}): {}", uc, e);
+    }
+}
+
 /// POST /api/ara {"sorgu": "...", "k": 5} — kayitli madenciye acik demo.
 /// Surum kilidi: anonim pahali tarama kapali (DoS/amplifikasyon); kayit
 /// ucretsiz ve acik oldugu icin demo erisilebilir kalir, izlenebilir olur.
@@ -734,8 +751,10 @@ async fn ara(
     headers: HeaderMap,
     Json(req): Json<AraReq>,
 ) -> Result<Json<AraResp>, (StatusCode, String)> {
-    token_dogrula(&headers, &state).await?;
-    Ok(Json(ara_calistir(&state, &req.sorgu, req.k).await?))
+    let mid = token_dogrula(&headers, &state).await?;
+    let out = ara_calistir(&state, &req.sorgu, req.k).await?;
+    kullanim_yaz(&state, &mid, "ara", 1).await;
+    Ok(Json(out))
 }
 
 /// GET /api/ara?q=...&k=5 — tarayici kolayligi (ayni kapi).
@@ -744,10 +763,12 @@ async fn ara_get(
     headers: HeaderMap,
     Query(q): Query<HashMap<String, String>>,
 ) -> Result<Json<AraResp>, (StatusCode, String)> {
-    token_dogrula(&headers, &state).await?;
+    let mid = token_dogrula(&headers, &state).await?;
     let sorgu = q.get("q").cloned().unwrap_or_default();
     let k = q.get("k").and_then(|s| s.parse::<usize>().ok());
-    Ok(Json(ara_calistir(&state, &sorgu, k).await?))
+    let out = ara_calistir(&state, &sorgu, k).await?;
+    kullanim_yaz(&state, &mid, "ara", 1).await;
+    Ok(Json(out))
 }
 
 /// P2P dugum kimlik tohumu (B18): dosyada 32B saklanir, yoksa uretilir (0600).
@@ -2935,6 +2956,76 @@ async fn kanarya_kontrol(
     Ok(Json(serde_json::json!({"eslesti": kid.is_some(), "dagitim_sayisi": dagitim_sayisi})))
 }
 
+/// EPIC-04 kuyruk: miner açık araştırma görevini çeker (en eski önce).
+/// Auth: kayıtlı miner token'ı. Claim atomik değil v0 (tek miner varsayımı yok,
+/// aynı görev iki miner'a gidebilir — sonuçta ilk yazan değil, hepsi saklanır).
+async fn arastirma_kuyruk(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Query(q): Query<HashMap<String, String>>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let _miner_id = token_dogrula(&headers, &state).await?;
+    let limit: i64 = q.get("limit").and_then(|s| s.parse().ok()).unwrap_or(5).clamp(1, 20);
+    let rows = sqlx::query(
+        "SELECT id, hedef, parametre, ts FROM arastirma_gorev WHERE durum = 'acik' ORDER BY id ASC LIMIT ?",
+    )
+    .bind(limit)
+    .fetch_all(&state.pool)
+    .await
+    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    let gorevler: Vec<serde_json::Value> = rows
+        .iter()
+        .map(|r| {
+            let id: i64 = r.get("id");
+            let hedef: String = r.get("hedef");
+            let parametre: String = r.get("parametre");
+            let ts: i64 = r.get("ts");
+            serde_json::json!({"id": id, "hedef": hedef, "parametre": serde_json::from_str::<serde_json::Value>(&parametre).unwrap_or(serde_json::json!({})), "ts": ts})
+        })
+        .collect();
+    Ok(Json(serde_json::json!({"gorevler": gorevler, "sayi": gorevler.len()})))
+}
+
+/// EPIC-04 sonuç: miner bulgusunu provenance ile yazar, görevi kapatmaz
+/// (aynı hedefe çok sonuç birikebilir — graf birleştirme Faz C-4'te).
+async fn arastirma_sonuc(
+    State(state): State<Arc<AppState>>,
+    headers: HeaderMap,
+    Json(req): Json<serde_json::Value>,
+) -> Result<Json<serde_json::Value>, (StatusCode, String)> {
+    let miner_id = token_dogrula(&headers, &state).await?;
+    let gorev_id = req.get("gorev_id").and_then(|v| v.as_i64()).ok_or((StatusCode::BAD_REQUEST, "gorev_id gerekli".to_string()))?;
+    let url = req.get("url").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    if url.len() > 1000 {
+        return Err((StatusCode::BAD_REQUEST, "url çok uzun".to_string()));
+    }
+    let karakter = req.get("karakter").and_then(|v| v.as_i64()).unwrap_or(0);
+    let icerik_hash = req.get("icerik_hash").and_then(|v| v.as_str()).unwrap_or("").to_string();
+    let guven = req.get("guven").and_then(|v| v.as_f64()).unwrap_or(0.0).clamp(0.0, 1.0);
+    // görev var mı?
+    let var: Option<i64> = sqlx::query_scalar("SELECT id FROM arastirma_gorev WHERE id = ?")
+        .bind(gorev_id)
+        .fetch_optional(&state.pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    if var.is_none() {
+        return Err((StatusCode::NOT_FOUND, "gorev yok".to_string()));
+    }
+    sqlx::query("INSERT INTO arastirma_sonuc (gorev_id, miner_id, url, karakter, icerik_hash, guven, ts) VALUES (?, ?, ?, ?, ?, ?, ?)")
+        .bind(gorev_id)
+        .bind(&miner_id)
+        .bind(&url)
+        .bind(karakter)
+        .bind(&icerik_hash)
+        .bind(guven)
+        .bind(current_epoch())
+        .execute(&state.pool)
+        .await
+        .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+    kullanim_yaz(&state, &miner_id, "arastirma-sonuc", 1).await;
+    Ok(Json(serde_json::json!({"ok": true, "gorev_id": gorev_id})))
+}
+
 async fn denetim_sonuc(    State(state): State<Arc<AppState>>,
     headers: HeaderMap,
     Json(req): Json<DenetimSonuc>,
@@ -3582,15 +3673,65 @@ async fn komut(
 
     let payload_json: serde_json::Value = serde_json::from_str(payload)
         .map_err(|_| (StatusCode::BAD_REQUEST, "Invalid payload JSON".to_string()))?;
-    komut_uygula(&state, &payload_json).await?;
+    komut_uygula(&state, &payload_json, epoch, pubkey_b64, "http").await?;
 
     Ok(Json(serde_json::json!({"ok": true, "epoch": epoch})))
+}
+
+/// PARANOID-MINER EPIC-05 STORY-05.3: komut beyaz listesi (F1).
+/// listedekiler uygulanır, dışındakiler red + audit + alarm (gossip'te idempotency
+/// için Ok dönülür ama sonuç='red' yazılır).
+const KOMUT_BEYAZ_LISTE: &[&str] = &[
+    "dur", "yeniden_baslat", "gorev_degistir", "affet", "imha",
+    "karantina", "karantina_kaldir", "duraklat", "devam", "arastir",
+];
+
+async fn komut_audit_yaz(
+    state: &Arc<AppState>,
+    epoch: i64,
+    tip: &str,
+    payload_json: &serde_json::Value,
+    pubkey_b64: &str,
+    kaynak: &str,
+    sonuc: &str,
+) {
+    let payload_str = payload_json.to_string();
+    // Audit yazımı asla komutu devirmez (hata yoksayılır, warn loglanır).
+    if let Err(e) = sqlx::query(
+        "INSERT INTO komut_log (epoch, tip, payload_json, pubkey_b64, kaynak, sonuc, ts) VALUES (?, ?, ?, ?, ?, ?, ?)",
+    )
+    .bind(epoch)
+    .bind(tip)
+    .bind(payload_str)
+    .bind(pubkey_b64)
+    .bind(kaynak)
+    .bind(sonuc)
+    .bind(current_epoch())
+    .execute(&state.pool)
+    .await
+    {
+        warn!("komut audit yazılamadı ({}): {}", tip, e);
+    }
 }
 
 /// Komut tip-uygulayici (HTTP + gossip ortak): imza/vade kontrolu DISARIDA,
 /// burada sadece yetki-gerektiren is. Idempotent tipler (affet/imha) tekrar
 /// yayinda cift-uygulamaya dayaniklidir (SET tabanli, artimsal degil).
-async fn komut_uygula(state: &Arc<AppState>, payload_json: &serde_json::Value) -> Result<(), (StatusCode, String)> {
+async fn komut_uygula(
+    state: &Arc<AppState>,
+    payload_json: &serde_json::Value,
+    epoch: i64,
+    pubkey_b64: &str,
+    kaynak: &str,
+) -> Result<(), (StatusCode, String)> {
+    let tip = payload_json.get("tip").and_then(|v| v.as_str()).unwrap_or("tip-yok");
+    // Beyaz liste dışı: red + audit + alarm, gossip idempotency için Ok.
+    if !KOMUT_BEYAZ_LISTE.contains(&tip) {
+        warn!("komut red (beyaz liste dışı): {} kaynak={}", tip, kaynak);
+        komut_audit_yaz(state, epoch, tip, payload_json, pubkey_b64, kaynak, "red-beyaz-liste").await;
+        return Ok(());
+    }
+    let sonuc: Result<(), (StatusCode, String)> = async {
     if let Some(tip) = payload_json.get("tip").and_then(|v| v.as_str()) {
         match tip {
             "dur" => {
@@ -3636,13 +3777,75 @@ async fn komut_uygula(state: &Arc<AppState>, payload_json: &serde_json::Value) -
                     .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
                 warn!("IMHA komutu: {} banlandi, pay sifirlandi (neden: {})", mid, neden);
             }
+            "karantina" => {
+                // EPIC-10: yeni görev dağıtımını durdur, mevcut kanıt/ledger korunur.
+                let neden = payload_json.get("neden").and_then(|v| v.as_str()).unwrap_or("operator");
+                sqlx::query("INSERT OR REPLACE INTO komut_durum (k, v, ts) VALUES ('karantina', '1', ?)")
+                    .bind(current_epoch())
+                    .execute(&state.pool)
+                    .await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                warn!("KARANTINA açıldı (neden: {})", neden);
+            }
+            "karantina_kaldir" => {
+                sqlx::query("INSERT OR REPLACE INTO komut_durum (k, v, ts) VALUES ('karantina', '0', ?)")
+                    .bind(current_epoch())
+                    .execute(&state.pool)
+                    .await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                info!("KARANTINA kaldırıldı");
+            }
+            "duraklat" => {
+                sqlx::query("INSERT OR REPLACE INTO komut_durum (k, v, ts) VALUES ('dagitim_duraklat', '1', ?)")
+                    .bind(current_epoch())
+                    .execute(&state.pool)
+                    .await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                warn!("DAĞITIM DURAKLATıldı (operator el freni)");
+            }
+            "devam" => {
+                sqlx::query("INSERT OR REPLACE INTO komut_durum (k, v, ts) VALUES ('dagitim_duraklat', '0', ?)")
+                    .bind(current_epoch())
+                    .execute(&state.pool)
+                    .await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                info!("DAĞITIM devam ediyor");
+            }
+            "arastir" => {
+                // Faz C kuyruk: hedef zorunlu, parametre serbest JSON. Miner kuyruktan çeker.
+                let hedef = payload_json.get("hedef").and_then(|v| v.as_str()).ok_or((StatusCode::BAD_REQUEST, "hedef gerekli".to_string()))?;
+                if hedef.len() > 500 {
+                    return Err((StatusCode::BAD_REQUEST, "hedef çok uzun".to_string()));
+                }
+                let parametre = payload_json.get("parametre").cloned().unwrap_or(serde_json::json!({})).to_string();
+                sqlx::query("INSERT INTO arastirma_gorev (hedef, parametre, durum, olusturan, ts) VALUES (?, ?, 'acik', 'komut', ?)")
+                    .bind(hedef)
+                    .bind(parametre)
+                    .bind(current_epoch())
+                    .execute(&state.pool)
+                    .await
+                    .map_err(|e| (StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))?;
+                info!("ARASTIR kuyruğa eklendi: {}", hedef);
+            }
             _ => {
+                // Beyaz liste üstte denetlendiği için buraya düşmez (defansif).
                 info!("Bilinmeyen komut tipi: {}", tip);
             }
         }
     }
 
     Ok(())
+    }.await;
+    let sonuc_tip = payload_json.get("tip").and_then(|v| v.as_str()).unwrap_or("tip-yok").to_string();
+    let kayit_sonuc = match &sonuc {
+        Ok(()) => "ok",
+        Err((_, m)) => {
+            warn!("komut uygula-hata ({}): {}", sonuc_tip, m);
+            "hata"
+        }
+    };
+    komut_audit_yaz(state, epoch, &sonuc_tip, payload_json, pubkey_b64, kaynak, kayit_sonuc).await;
+    sonuc
 }
 
 // --- Main ---
@@ -3671,6 +3874,8 @@ fn app_router(state: Arc<AppState>) -> Router {
         .route("/api/denetim/sonuc", post(denetim_sonuc))
         .route("/api/metin/:kor", get(metin))
         .route("/api/kanarya/kontrol", get(kanarya_kontrol))
+        .route("/api/arastirma/kuyruk", get(arastirma_kuyruk))
+        .route("/api/arastirma/sonuc", post(arastirma_sonuc))
         .route("/api/shard/ilan", post(shard_ilan))
         .route("/api/shard", get(shard_liste))
         .route("/api/ara", post(ara))
@@ -3989,7 +4194,7 @@ async fn main() -> anyhow::Result<()> {
                                             let msg = komut_mesaj(e as i64, x as i64, p);
                                             if verify_signed_command(&msg, s, k) {
                                                 match serde_json::from_str::<serde_json::Value>(p) {
-                                                    Ok(pj) => match komut_uygula(&state2, &pj).await {
+                                                    Ok(pj) => match komut_uygula(&state2, &pj, e as i64, k, &format!("gossip:{}", from)).await {
                                                         Ok(()) => info!("gossip komut uygulandi epoch={} <- {}", e, from),
                                                         Err((_, m)) => warn!("gossip komut uygula-hata ({}): {}", from, m),
                                                     },
@@ -4236,6 +4441,30 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn test_arastirma_kuyruk_sonuc() {
+        // Faz C kuyruk: komut{arastir} -> kuyruk -> sonuc. Hedefsiz komut red.
+        let state = test_state().await;
+        sqlx::query("INSERT INTO miners (miner_id, token, cuzdan, makine_id, created_at) VALUES ('m1', 't1', 'c', 'k', 1)")
+            .execute(&state.pool).await.unwrap();
+        let kotu = serde_json::json!({"tip": "arastir"});
+        assert!(komut_uygula(&state, &kotu, 10, "", "test").await.is_err(), "hedefsiz arastir geçmemeli");
+        let iyi = serde_json::json!({"tip": "arastir", "hedef": "Tengri-Zeus arketip", "parametre": {"derinlik": 1}});
+        assert!(komut_uygula(&state, &iyi, 11, "", "test").await.is_ok());
+        let mut h = HeaderMap::new();
+        h.insert("authorization", "Bearer t1".parse().unwrap());
+        let k = arastirma_kuyruk(State(state.clone()), h.clone(), Query(HashMap::new())).await.unwrap().0;
+        assert_eq!(k["sayi"], 1);
+        let gid = k["gorevler"][0]["id"].as_i64().unwrap();
+        let s = arastirma_sonuc(
+            State(state.clone()), h,
+            Json(serde_json::json!({"gorev_id": gid, "url": "https://tr.wikipedia.org/wiki/Tengri", "karakter": 4665, "icerik_hash": "abc", "guven": 0.8})),
+        ).await.unwrap().0;
+        assert_eq!(s["ok"], true);
+        let n: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM arastirma_sonuc WHERE gorev_id = ?").bind(gid).fetch_one(&state.pool).await.unwrap();
+        assert_eq!(n, 1);
+    }
+
+    #[tokio::test]
     async fn test_token_kasasi() {
         // B39: kayit HMAC-saklar, auth HMAC-dogrular, eski-duz-metin
         // ilk-kullanimda yukseltir. Kanarya eski-formda kalir.
@@ -4274,25 +4503,40 @@ mod tests {
 
     #[tokio::test]
     async fn test_komut_uygula_gossip() {
-        // B33: HTTP+gossip ortak uygulayici; bilinmeyen tip Ok, affet/imha
-        // idempotent (tekrar-yayin guvenli).
+        // B33: HTTP+gossip ortak uygulayici; bilinmeyen tip Ok (red-audit), affet/imha
+        // idempotent (tekrar-yayin guvenli). F1: beyaz liste + audit eklendi.
         let state = test_state().await;
         let bilinmeyen = serde_json::json!({"tip": "yok-boyle-tip"});
-        assert!(komut_uygula(&state, &bilinmeyen).await.is_ok());
+        assert!(komut_uygula(&state, &bilinmeyen, 1, "", "test").await.is_ok());
+        // red audit yazıldı mı?
+        let red: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM komut_log WHERE tip='yok-boyle-tip' AND sonuc='red-beyaz-liste'")
+            .fetch_one(&state.pool).await.unwrap();
+        assert_eq!(red, 1, "beyaz liste dışı audit'e red düşer");
         let affet = serde_json::json!({"tip": "affet", "miner_id": "m-yok"});
-        assert!(komut_uygula(&state, &affet).await.is_ok());
-        assert!(komut_uygula(&state, &affet).await.is_ok(), "affet idempotent");
+        assert!(komut_uygula(&state, &affet, 2, "", "test").await.is_ok());
+        assert!(komut_uygula(&state, &affet, 3, "", "test").await.is_ok(), "affet idempotent");
+        // karantina aç/kapat döngüsü
+        let kar = serde_json::json!({"tip": "karantina", "neden": "test"});
+        assert!(komut_uygula(&state, &kar, 4, "", "test").await.is_ok());
+        let v: String = sqlx::query_scalar("SELECT v FROM komut_durum WHERE k='karantina'")
+            .fetch_one(&state.pool).await.unwrap();
+        assert_eq!(v, "1");
+        let kkaldir = serde_json::json!({"tip": "karantina_kaldir"});
+        assert!(komut_uygula(&state, &kkaldir, 5, "", "test").await.is_ok());
+        let v2: String = sqlx::query_scalar("SELECT v FROM komut_durum WHERE k='karantina'")
+            .fetch_one(&state.pool).await.unwrap();
+        assert_eq!(v2, "0");
         sqlx::query("INSERT INTO miners (miner_id, token, cuzdan, makine_id, created_at, coin_mikro) VALUES ('m1', 't', 'c', 'k', 1, 500)")
             .execute(&state.pool).await.unwrap();
         let imha = serde_json::json!({"tip": "imha", "miner_id": "m1", "neden": "test"});
-        assert!(komut_uygula(&state, &imha).await.is_ok());
+        assert!(komut_uygula(&state, &imha, 6, "", "test").await.is_ok());
         let coin: i64 = sqlx::query_scalar("SELECT coin_mikro FROM miners WHERE miner_id = 'm1'")
             .fetch_one(&state.pool).await.unwrap();
         assert_eq!(coin, 0, "imha coin sifirlar");
         let kara: i64 = sqlx::query_scalar("SELECT COUNT(*) FROM kara_liste WHERE miner_id = 'm1'")
             .fetch_one(&state.pool).await.unwrap();
         assert_eq!(kara, 1);
-        assert!(komut_uygula(&state, &imha).await.is_ok(), "imha idempotent");
+        assert!(komut_uygula(&state, &imha, 7, "", "test").await.is_ok(), "imha idempotent");
     }
 
     #[tokio::test]

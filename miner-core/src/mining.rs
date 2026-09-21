@@ -288,6 +288,55 @@ impl GorevAlici {
         eprintln!("kira alindi: {} alt-gorev kuyrukta", n);
         true
     }
+
+    /// Faz C otonom çekiş: açık araştırma görevlerinden en eskiyi al.
+    /// Yoksa Ok(None). Ağ/timeout hatası üstte yutulur (üretim etkilenmez).
+    pub async fn arastirma_gorev_al(&self) -> anyhow::Result<Option<(i64, String)>> {
+        let url = format!("{}/api/arastirma/kuyruk?limit=1", self.base_url.trim_end_matches('/'));
+        let resp = self.client
+            .get(&url)
+            .header("Authorization", format!("Bearer {}", self.token))
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            return Ok(None);
+        }
+        let v: serde_json::Value = resp.json().await?;
+        let ilk = v.get("gorevler").and_then(|a| a.as_array()).and_then(|a| a.first().cloned());
+        match ilk {
+            Some(g) => {
+                let id = g.get("id").and_then(|x| x.as_i64()).unwrap_or(0);
+                let hedef = g.get("hedef").and_then(|x| x.as_str()).unwrap_or("").to_string();
+                if id > 0 && !hedef.is_empty() {
+                    return Ok(Some((id, hedef)));
+                }
+                Ok(None)
+            }
+            None => Ok(None),
+        }
+    }
+
+    /// Faz C sonuç gönder (async): bulguyu provenance ile yazar.
+    pub async fn arastirma_sonuc_gonder(&self, gorev_id: i64, url: &str, karakter: i64, icerik_hash: &str, guven: f64) -> anyhow::Result<()> {
+        let endpoint = format!("{}/api/arastirma/sonuc", self.base_url.trim_end_matches('/'));
+        let body = serde_json::json!({
+            "gorev_id": gorev_id,
+            "url": url,
+            "karakter": karakter,
+            "icerik_hash": icerik_hash,
+            "guven": guven,
+        });
+        let resp = self.client
+            .post(&endpoint)
+            .header("Authorization", format!("Bearer {}", self.token))
+            .json(&body)
+            .send()
+            .await?;
+        if !resp.status().is_success() {
+            anyhow::bail!("arastirma sonuc http={}", resp.status());
+        }
+        Ok(())
+    }
 }
 
 /// Kanıt gönderici
@@ -438,6 +487,84 @@ async fn bosta_bekle(sure: Duration, uyan_rx: &mut Option<tokio::sync::watch::Re
     }
 }
 
+/// Bosta-egitim (Prompt: GPU-bos-kalmasin): isci gorevsiz kalinca DAPT adimi.
+/// Tasarim: egitim, uretimin YERINE degil ARASINA girer (sinirli adim,
+/// checkpointli); gorev gelince dongu normale doner. Cikti adaptoru
+/// FedAvg-turuna katilir (FEDERE-EGITIM-TASARIM).
+#[derive(Clone, Debug)]
+pub struct BostaEgitim {
+    /// Egitim ev-dizini (train.py + .venv + model icerir).
+    pub ev: std::path::PathBuf,
+    /// Model dizini (or. .../modeller/Qwen3-1.7B-Base).
+    pub model: String,
+    /// Ham-metin tamponu (asagida birikir).
+    pub tampon: std::path::PathBuf,
+    /// Cikti adaptor dizini.
+    pub cikti: std::path::PathBuf,
+    /// Tetik esigi (tampon satir sayisi) ve tur-basi adim.
+    pub min_satir: usize,
+    pub adim: u32,
+}
+
+/// Uretim metinlerini egitim-tamponuna ekle (capped, JSONL).
+/// Sadece dogal-uretim metinleri girer (denetim-kopyalari degil).
+pub fn tampona_ekle(tampon: &std::path::Path, metinler: &[String]) {
+    use std::io::Write;
+    let Ok(mut f) = std::fs::OpenOptions::new().create(true).append(true).open(tampon) else { return };
+    for m in metinler {
+        let kisa: String = m.chars().take(1200).collect();
+        let satir = serde_json::json!({"metin": kisa}).to_string();
+        let _ = writeln!(f, "{}", satir);
+    }
+    // Budama: 6000 satiri asarsa basi at (halka-tampon).
+    if let Ok(icerik) = std::fs::read_to_string(tampon) {
+        let sat: Vec<&str> = icerik.lines().collect();
+        if sat.len() > 6000 {
+            let _ = std::fs::write(tampon, sat[sat.len() - 5000..].join("\n") + "\n");
+        }
+    }
+}
+
+/// Tampon sayisi (egitim-esigi karari icin).
+pub fn tampon_say(tampon: &std::path::Path) -> usize {
+    std::fs::read_to_string(tampon).map(|s| s.lines().count()).unwrap_or(0)
+}
+
+/// Tek-bosta-egitim turu: sinirli-adim DAPT, blocking-cagrida kosar
+/// (async-cevirici tarafindan spawn_blocking ile cagrilir).
+/// Basarisizlik SESSIZDIR (uretim etkilenmez; log basilir).
+pub fn bosta_egitim_turu(worker_id: usize, be: &BostaEgitim) {
+    let train_py = be.ev.join("train.py");
+    let venv_py = be.ev.join(".venv").join("bin").join("python");
+    if !train_py.exists() || !venv_py.exists() {
+        eprintln!("[worker-{}] bosta-egitim atlandi (train.py/.venv yok: {})", worker_id, be.ev.display());
+        return;
+    }
+    eprintln!("[worker-{}] bosta-egitim: {} adim (tampon {})", worker_id, be.adim, be.tampon.display());
+    let cikti = std::process::Command::new(&venv_py)
+        .arg(&train_py)
+        .arg("--model").arg(&be.model)
+        .arg("--veri").arg(&be.tampon)
+        .arg("--ham-metin")
+        .arg("--cikti").arg(&be.cikti)
+        .arg("--adim").arg(be.adim.to_string())
+        .arg("--batch").arg("2")
+        .arg("--en-fazla").arg("2000")
+        .output();
+    match cikti {
+        Ok(o) if o.status.success() => {
+            eprintln!("[worker-{}] bosta-egitim turu bitti -> {}", worker_id, be.cikti.display());
+        }
+        Ok(o) => {
+            let hata = String::from_utf8_lossy(&o.stderr);
+            eprintln!("[worker-{}] bosta-egitim basarisiz (kod {}): {}", worker_id, o.status, hata.chars().take(200).collect::<String>());
+        }
+        Err(e) => {
+            eprintln!("[worker-{}] bosta-egitim calistirilamadi: {}", worker_id, e);
+        }
+    }
+}
+
 /// Ana mining döngüsü - görev al -> embed et -> kanıt gönder
 ///
 /// `uyan_rx`: R4/P2P uyandirma sayaci (komuta `nemes/gorev` duyurusu).
@@ -453,6 +580,8 @@ pub async fn mining_loop(
     durdur_rx: tokio::sync::watch::Receiver<bool>,
     depolama_dir: Option<std::path::PathBuf>,
     mut uyan_rx: Option<tokio::sync::watch::Receiver<u64>>,
+    bosta_egitim: Option<BostaEgitim>,
+    arastirma_acik: bool,
 ) -> anyhow::Result<()> {
     let mut islenen = 0u64;
     let baslangic = std::time::Instant::now();
@@ -462,11 +591,72 @@ pub async fn mining_loop(
         if *durdur_rx.borrow() {
             break;
         }
+        // Kill-switch dosyası (ops/kill-switch.sh): varsa temiz çık.
+        if crate::komut::dur_kontrol() {
+            break;
+        }
 
         // 1. Görev al
         let gorev = match gorev_alici.gorev_al().await {
             Ok(Some(g)) => g,
             Ok(None) => {
+                // Faz C otonom çekiş: embed kuyruğu boşsa araştırma görevine bak.
+                // Sadece URL hedefler otomatik çekilir (konu hedefler operatorde kalır).
+                if arastirma_acik {
+                    match gorev_alici.arastirma_gorev_al().await {
+                        Ok(Some((ar_id, hedef))) => {
+                            if crate::arastirma::url_izinli_mi(&hedef) {
+                                eprintln!("[worker-{}] arastirma: {} (gorev {})", worker_id, hedef, ar_id);
+                                let base = gorev_alici.base_url.clone();
+                                let tok = gorev_alici.token.clone();
+                                let istemci = reqwest::blocking::Client::builder()
+                                    .user_agent(MINER_USER_AGENT)
+                                    .timeout(std::time::Duration::from_secs(crate::arastirma::ZAMAN_ASIMI_SN))
+                                    .build();
+                                let hedef2 = hedef.clone();
+                                let res = tokio::task::spawn_blocking(move || -> anyhow::Result<()> {
+                                    let cli = istemci?;
+                                    // robots: host kökünden tek seferlik çek (yoksa None ile devam)
+                                    let kok = hedef2.split('/').take(3).collect::<Vec<_>>().join("/");
+                                    let robots = cli.get(format!("{}/robots.txt", kok))
+                                        .header("User-Agent", MINER_USER_AGENT)
+                                        .timeout(std::time::Duration::from_secs(10))
+                                        .send().ok().and_then(|r| r.text().ok());
+                                    let (metin, prov) = crate::arastirma::kuralli_fetch(&cli, &hedef2, robots.as_deref())?;
+                                    let kar = metin.chars().count() as usize;
+                                    crate::arastirma::sonuc_gonder(&cli, &base, &tok, ar_id, &prov, kar)?;
+                                    Ok(())
+                                })
+                                .await;
+                                match res {
+                                    Ok(Ok(())) => {
+                                        eprintln!("[worker-{}] arastirma tamam: gorev {}", worker_id, ar_id);
+                                        continue;
+                                    }
+                                    Ok(Err(e)) => eprintln!("[worker-{}] arastirma hata (gorev {}): {}", worker_id, ar_id, e),
+                                    Err(e) => eprintln!("[worker-{}] arastirma task hatası: {}", worker_id, e),
+                                }
+                            } else {
+                                eprintln!("[worker-{}] arastirma atlandi (URL değil/izin dışı): {}", worker_id, hedef.chars().take(80).collect::<String>());
+                            }
+                        }
+                        Ok(None) => {}
+                        Err(e) => eprintln!("[worker-{}] arastirma kuyruk hatası: {}", worker_id, e),
+                    }
+                }
+                // Bosta-egitim: gorev yoksa uyuma, EGIT (GPU-bos-kalmasin).
+                // Sinirli-adim + checkpointli; bitince dongu goreve doner.
+                // Blocking-cagri oldugu icin ayri-threade alinir (dongu kitlenmez).
+                if let Some(ref be) = bosta_egitim {
+                    if tampon_say(&be.tampon) >= be.min_satir {
+                        let be2 = be.clone();
+                        let _ = tokio::task::spawn_blocking(move || {
+                            bosta_egitim_turu(worker_id, &be2);
+                        })
+                        .await;
+                        continue;
+                    }
+                }
                 bosta_bekle(Duration::from_secs(5), &mut uyan_rx).await;
                 continue;
             }
@@ -504,6 +694,10 @@ pub async fn mining_loop(
                         continue;
                     }
                 };
+                // Bosta-egitim tamponu: uretim metinleri birikir (denetim-kopya degil).
+                if let Some(ref be) = bosta_egitim {
+                    tampona_ekle(&be.tampon, &metinler);
+                }
 
                 // Madde ID'leri payload'dan al veya index olarak kullan
                 let madde_idler: Vec<usize> = payload.as_ref()
@@ -738,6 +932,26 @@ pub fn int8_nicele(vektor: &[f32]) -> (Vec<u8>, f32, f32) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn test_tampon_birikim_ve_esik() {
+        // Bosta-egitim tamponu: birikir, budanir, esik okunur.
+        let yol = std::env::temp_dir().join("nemes-test-tampon.jsonl");
+        let _ = std::fs::remove_file(&yol);
+        assert_eq!(tampon_say(&yol), 0);
+        tampona_ekle(&yol, &["merhaba dunya".to_string(), "ikinci metin".to_string()]);
+        assert_eq!(tampon_say(&yol), 2);
+        // Eksik-train.py yolu: sessiz-atlama (uretim etkilenmez).
+        let be = BostaEgitim {
+            ev: std::path::PathBuf::from("/yok-boyle-dizin"),
+            model: String::new(),
+            tampon: yol.clone(),
+            cikti: std::path::PathBuf::from("/tmp"),
+            min_satir: 1,
+            adim: 1,
+        };
+        bosta_egitim_turu(99, &be); // paniklememeli, sadece log basar
+        let _ = std::fs::remove_file(&yol);
+    }
     #[test]
     fn test_int8_roundtrip() {
         let v = vec![0.0, 0.5, 1.0];
