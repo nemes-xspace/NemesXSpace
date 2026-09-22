@@ -4091,7 +4091,9 @@ async fn main() -> anyhow::Result<()> {
             let mut son = son_id;
             loop {
                 tokio::time::sleep(Duration::from_secs(HAVUZ_YENILE_SN)).await;
-                match yukle_havuz(&pool_r, &corpus_r, son, 0).await {
+                // B44b: tazelemede de tavanla sınırlı çek (sınırsız çekiş
+                // milyonlarca satırı base64 çözüp OOM-kill yiyordu).
+                match yukle_havuz(&pool_r, &corpus_r, son, tavan_r).await {
                     Ok((ek, yeni_son)) => {
                         son = yeni_son;
                         if ek.n > 0 {
