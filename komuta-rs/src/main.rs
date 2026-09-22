@@ -605,6 +605,9 @@ async fn yukle_havuz(
 struct AraReq {
     sorgu: String,
     k: Option<usize>,
+    /// İstenen derlem. Havuz tek-derlemlidir (canlı corpus); farklı derlem
+    /// istenirse 400 + açıklayıcı hata döner (sessizce yanlış derlemde arama YOK).
+    corpus: Option<String>,
 }
 
 #[derive(Serialize)]
@@ -618,6 +621,7 @@ struct AraSonuc {
 #[derive(Serialize)]
 struct AraResp {
     sorgu: String,
+    corpus: String,
     sonuclar: Vec<AraSonuc>,
     k: usize,
     toplam_vektor: usize,
@@ -733,6 +737,7 @@ async fn ara_calistir(
 
     Ok(AraResp {
         sorgu: s.to_string(),
+        corpus: state.corpus.clone(),
         sonuclar,
         k: kk,
         toplam_vektor: n,
@@ -766,6 +771,11 @@ async fn ara(
     Json(req): Json<AraReq>,
 ) -> Result<Json<AraResp>, (StatusCode, String)> {
     let mid = token_dogrula(&headers, &state).await?;
+    if let Some(ref c) = req.corpus {
+        if c != &state.corpus {
+            return Err((StatusCode::BAD_REQUEST, format!("bu uç şu an '{}' derleminde; '{}' için ayrı havuz gerekir", state.corpus, c)));
+        }
+    }
     let out = ara_calistir(&state, &req.sorgu, req.k).await?;
     kullanim_yaz(&state, &mid, "ara", 1).await;
     Ok(Json(out))
@@ -780,6 +790,11 @@ async fn ara_get(
     let mid = token_dogrula(&headers, &state).await?;
     let sorgu = q.get("q").cloned().unwrap_or_default();
     let k = q.get("k").and_then(|s| s.parse::<usize>().ok());
+    if let Some(c) = q.get("corpus") {
+        if c != &state.corpus {
+            return Err((StatusCode::BAD_REQUEST, format!("bu uç şu an '{}' derleminde; '{}' için ayrı havuz gerekir", state.corpus, c)));
+        }
+    }
     let out = ara_calistir(&state, &sorgu, k).await?;
     kullanim_yaz(&state, &mid, "ara", 1).await;
     Ok(Json(out))
